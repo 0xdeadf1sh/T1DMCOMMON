@@ -1,0 +1,7 @@
+# Working notes are local by design: this repository is public, and anything
+# internal-flavoured belongs in the repository that owns it (see
+# skills/common-boundary).
+*.private.md
+*.local.md
+NOTES.md
+scratch/

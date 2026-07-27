@@ -1,0 +1,97 @@
+# T1DMSERVER — working knowledge
+
+The sync backend: one binary that is at once an HTTP/WebSocket server and a live
+terminal dashboard, over an in-process SQLite store. Rust, MIT. Runs unattended
+on a Raspberry Pi Zero 2 W and is watched from a tmux session over SSH.
+
+Its remit is deliberately narrow — see `../CLAUDE.md`, *What T1DMSERVER is, and is
+not*. Read that before changing anything here; the most common mistake in this
+repository is giving the server a job that belongs to the phone.
+
+## Shape
+
+A single process. A four-worker Tokio runtime serves the axum router and watches
+the models directory; the ratatui TUI owns the main thread. SQLite runs in WAL
+mode with every write serialized behind one mutex and reads served from an r2d2
+pool on blocking tasks. Stored records reach the TUI over an in-process broadcast
+channel, so the dashboard updates without polling.
+
+Four crates plus a root binary: `core` (domain types, units, curve maths, config),
+`store` (schema, writer, read pool, tokens, sessions, model registry), `api`
+(router, auth extractors, handlers, hub), `tui` (layout, panes, widgets, themes,
+animation, boot sequences).
+
+## The recast
+
+The server was originally a participant: it computed statistics, held carbohydrate
+and insulin as sample columns, and re-stamped what it received. That design is
+gone. It is now a verbatim store and a read-only fan-out:
+
+- statistics are **pushed by the phone** and stored opaquely; the server computes
+  none
+- meals, doses, and prediction curves are **first-class events** keyed by a
+  phone-minted `client_id`; `samples` holds scalars only
+- the phone's `updated_at` is stored **verbatim** and is the ordering key for
+  every idempotent upsert
+- every write fans out to all sessions **except its origin**
+- a `store_epoch` marks store identity so a client can detect a wipe and re-mirror
+
+Documentation or comments implying the older design are stale, not authoritative.
+
+## Gates
+
+**This repository has no CI.** Its sister has three blocking workflows; this one
+has none, which is part of why it drifted. Nothing runs unless a person runs it,
+so the gate is easy to skip and expensive to have skipped.
+
+The commands, and the two traps that make a skipped step look like a pass, are in
+the project's own `CLAUDE.md`. Read it before claiming a change works.
+
+## Storage layout
+
+Everything sits under `storage.data_dir` (default `./data`): the database, plus
+`models/`, `photos/`, and `backups/`. Note the models directory the binary
+actually uses is `<data_dir>/models`, not the repository-root `models/`.
+
+The database grows by roughly a gigabyte per year and is not compacted. Backups
+are taken on demand from the Settings pane — there is no scheduler, despite
+`BackupConfig` existing in the configuration structs, where nothing reads it.
+
+The Developer pane's teardown drops and recreates every table and clears the
+photos directory, leaving the models directory alone. It also re-mints the
+`store_epoch`, which is what tells a client to replay its history.
+
+## Access
+
+Opaque bearer tokens — 32 random bytes as hex, stored only as a salted SHA-256
+verifier, never expiring, revocable. At most one live `rw` token exists at a time,
+enforced by a partial unique index; each viewing device gets its own `ro` token.
+
+Tokens are minted **only** from the TUI's Sessions pane; there is no HTTP endpoint
+for token management. First light therefore requires terminal access: start the
+binary, open Sessions, mint the `rw` token, scan the QR.
+
+Plain HTTP, permissive CORS, non-expiring tokens: this is a tailnet or LAN
+appliance and must not face the open internet.
+
+## The console
+
+Four themes — Tron Legacy, Umbrella Corp, Hello Kitty, Windows XP — each with its
+own palette, animations, boot sequence, and glyph set, hot-swappable at runtime.
+Panes: Dashboard, Data, Models, Notes, Sessions, Device, Developer, Logs,
+Settings, Help. `Tab` cycles panes, `t` cycles themes, `h` or `?` opens help, `q`
+quits.
+
+Rendering is demand-driven: the UI idles near zero cost and wakes on input, a data
+event, or a live animation. Layout reflows from a wide multi-panel view down to a
+single-column Termux layout.
+
+The console carries its own curve mathematics and risk transform purely to draw
+these panes. Those are display conveniences and must never write back into stored
+data. Divergence there misleads the operator; it does not corrupt a record.
+
+## Deployment
+
+Cross-compiled for aarch64 via `cross`, which supplies the C toolchain that
+`rusqlite`'s bundled SQLite needs (`just build-pi`). Run inside tmux so it
+survives SSH disconnects; the TUI expects truecolor and mouse forwarding.
