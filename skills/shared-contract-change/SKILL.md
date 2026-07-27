@@ -42,6 +42,12 @@ If `SPEC/` does not state it yet, add it. The spec is the artefact the next agen
 will read; an implementation change that leaves it stale has moved the drift
 rather than fixed it.
 
+The three specifications — `invariants.md`, `http-api.md`, `inference.md` — are
+**single-copy**. Amend the original; never bring a copy back into a project, and
+never "helpfully" paste the changed section into the consumer's documentation.
+A project's `docs/` entry is a stub naming the specification and carrying only
+what is local to that project. `scripts/check-no-copies.sh` enforces this.
+
 If the change alters the wire contract between `T1DMDROID` and `T1DMSERVER`,
 bump `CONTRACT_VERSION` and say what changed.
 
@@ -71,6 +77,13 @@ that it does — run it against the unmodified code before you trust it.
 Where both sides ship golden vectors for the same concept, compare them directly.
 Two files named `curve_golden.json` in two repositories are either identical in
 the scenarios they share or they are evidence of drift.
+
+Then run the copy check, which is a second's work and catches the failure mode
+this whole protocol exists to prevent:
+
+```
+scripts/check-no-copies.sh
+```
 
 ## 5. Report the seams you could not close
 

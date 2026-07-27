@@ -7,6 +7,11 @@ correct without checking the other.
 Each invariant records which repositories it binds. See `../CLAUDE.md` for the
 active/passive distinction that governs how strongly.
 
+Two companion specifications apply these definitions to a particular seam, and
+are equally normative: `http-api.md`, the wire contract between the app and the
+server, and `inference.md`, the model contract between the trainer and the app.
+All three are single-copy — see `../scripts/check-no-copies.sh`.
+
 ---
 
 ## 1. The five-minute grid
@@ -140,8 +145,9 @@ merely differ in scale — they disagree about where euglycaemia sits.
 
 These constants are **a property of a checkpoint**, not of the domain. They must
 be read from the model descriptor's `kovatchev` block and **must never be
-hardcoded**. A re-anchored checkpoint ships different constants, and decoding it
-against the clinical ones misreads glucose badly and silently.
+hardcoded**; `inference.md` §5 gives the block and the guards that go with it. A
+re-anchored checkpoint ships different constants, and decoding it against the
+clinical ones misreads glucose badly and silently.
 
 The scale triple survives in two hardcoded copies with no shared source and no
 cross-repository equality test — `T1DMAI/utils.py` (`_KOVATCHEV_*`) and
@@ -226,6 +232,9 @@ circadian distribution with a confidence scalar.
 quantile levels: 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95   (median at index 3)
 circadian bins:  12
 ```
+
+How the model produces this layout is `inference.md` §8; how it crosses the wire
+is `http-api.md` (Prediction).
 
 The **order** of the fan levels is part of the contract, and consumers do index
 it positionally — the median is read at index 3, not searched for. A producer

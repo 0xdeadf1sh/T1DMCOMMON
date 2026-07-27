@@ -19,9 +19,11 @@ that between them implement one physiology and one wire contract.
 
 ## Why this exists
 
-The same facts live in more than one repository: the five-minute grid, the
+The same facts are needed in more than one repository: the five-minute grid, the
 physiologic units, the Kovatchev risk transform, the curve mathematics, the
-forecast layout, and the contract the app and the server speak.
+forecast layout, the contract the app and the server speak, and the model
+contract the app decodes against. Each is written down **once**, here. A project
+that needs one keeps a stub at the path its readers expect, pointing back.
 
 Duplicated facts drift. Both copies are correct the day they are written and
 disagree later, silently — the software keeps working and one side is wrong.
@@ -40,6 +42,10 @@ CLAUDE.md          working rules and the suite map
 CONTRACT_VERSION   version of the app↔server wire contract
 SPEC/
   invariants.md    the grid, units, risk spaces, curve semantics, forecast layout
+  http-api.md      the HTTP/WebSocket contract between the app and the server
+  inference.md     the model contract: checkpoint, graph, decode, constants
+scripts/
+  check-no-copies.sh   fails when a specification has been copied into a project
 PROJECTS/
   T1DMSIM.md       per-project working knowledge: constraints, traps, gates,
   T1DMAI.md        and the conventions each project's author has settled on

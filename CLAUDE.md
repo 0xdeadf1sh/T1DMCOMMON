@@ -18,16 +18,22 @@ Before doing anything in a project, orient yourself in it. Read, in this order:
 4. `../<PROJECT>/.claude/skills/` — its skills. Several are **mandatory gates**,
    not suggestions; read their descriptions before you start, not after you are
    blocked.
-5. `../<PROJECT>/docs/` — its interface documentation.
+5. `../<PROJECT>/docs/` — its interface documentation. Several of those files are
+   **stubs**: the specification they name lives in `SPEC/` here, and the stub
+   carries only what is local to that project. Follow the pointer; do not
+   reconstruct the specification from the stub.
 
 What each project currently exposes:
 
 | Project | `CLAUDE.md` | Skills | `docs/` |
 | --- | --- | --- | --- |
 | `../T1DMSIM` | yes | — | `math.md` |
-| `../T1DMAI` | yes | — | `INFERENCE.md` |
-| `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`, `INFERENCE.md`, `WATCH_BLE.md`, `T1DMSERVER_API.md` |
-| `../T1DMSERVER` | yes | — | `API.md` |
+| `../T1DMAI` | yes | — | `INFERENCE.md` → `SPEC/inference.md` |
+| `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`, `WATCH_BLE.md`; `INFERENCE.md` → `SPEC/inference.md`, `T1DMSERVER_API.md` → `SPEC/http-api.md` |
+| `../T1DMSERVER` | yes | — | `API.md` → `SPEC/http-api.md` |
+
+`CGM.md` is the one interface document that must **never** be promoted here, in
+any part: see *What must never enter this repository*.
 
 Two cautions on the layout. A `CLAUDE.md` is not the whole of a project's rules:
 `T1DMDROID`'s skills are mandatory gates in their own right, and its build and
@@ -110,6 +116,23 @@ If a value, formula, or contract is defined under `SPEC/`, reference it. Do not
 restate it, re-derive it, or re-hardcode it. If you find an existing duplicate,
 report it rather than adding a third.
 
+**Specifications are single-copy, and that is checked.** `SPEC/invariants.md`,
+`SPEC/http-api.md` and `SPEC/inference.md` exist here and nowhere else. A project
+that needs one keeps a **stub** at the path its readers expect — naming this
+document, pointing at the sibling checkout, and carrying only what is local to
+that project. Never restore a copy, however convenient: both copies of the wire
+contract were correct on the day they were made, and the app's had fallen a
+version behind the server's before anyone noticed.
+
+```
+scripts/check-no-copies.sh          # 0 = clean, 1 = a copy exists
+```
+
+It fingerprints each specification with a handful of its own sentences and
+scans the four sibling checkouts, so it catches a copy under any filename — and
+a specification pasted into a source comment as readily as into a document. Run
+it before you finish anything that touched `SPEC/` or a project's `docs/`.
+
 ## Keeping this repository true
 
 One copy of a fact is only an improvement while the copy is right. A stale
@@ -174,16 +197,17 @@ let a display convenience write back into stored data.
 
 Changing any of these in one repository obliges you to check its counterparts:
 
-| Concept | Binds |
-| --- | --- |
-| The HTTP/WebSocket contract | `T1DMDROID` ↔ `T1DMSERVER` — live, strongest |
-| The five-minute grid, timestamps, `tz_offset` | all four |
-| Physiologic units, scales, sign conventions | all four |
-| The two risk spaces (see `SPEC/invariants.md`) | all four |
-| Meal-appearance and insulin-action curve mathematics | all four |
-| Quantile levels and order, horizon, circadian bins | `T1DMAI` → `T1DMDROID`, displayed by `T1DMSERVER` |
-| Statistics definitions | computed by `T1DMDROID`, displayed by `T1DMSERVER` |
-| The model descriptor format | `T1DMAI` → `T1DMDROID` |
+| Concept | Written in | Binds |
+| --- | --- | --- |
+| The HTTP/WebSocket contract | `SPEC/http-api.md` | `T1DMDROID` ↔ `T1DMSERVER` — live, strongest |
+| The five-minute grid, timestamps, `tz_offset` | `SPEC/invariants.md` §1–2 | all four |
+| Physiologic units, scales, sign conventions | `SPEC/invariants.md` §3 | all four |
+| The two risk spaces | `SPEC/invariants.md` §4 | all four |
+| Meal-appearance and insulin-action curve mathematics | `SPEC/invariants.md` §5 | all four |
+| Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID`, displayed by `T1DMSERVER` |
+| Authority, `client_id`, `updated_at` ordering | `SPEC/invariants.md` §7 | `T1DMDROID` ↔ `T1DMSERVER` |
+| Statistics definitions | `SPEC/http-api.md` (Stats) | computed by `T1DMDROID`, displayed by `T1DMSERVER` |
+| The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
 
 Anything on that list is a cross-repository change. Read
 `skills/shared-contract-change` before touching it.
