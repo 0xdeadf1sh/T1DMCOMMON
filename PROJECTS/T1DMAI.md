@@ -40,6 +40,10 @@ T1DMAI's own cache builder was deleted; it relies on `../T1DMSIM/cache_simulator
 a re-simulation — the re-simulate path is slightly off-distribution against the
 rail-filtered cache.
 
+`normalization_stats.json` is gitignored, so a fresh clone does not have one.
+Every checkpoint embeds its own copy, which is the authoritative z-space for
+those weights; the loose file is only what an untrained run needs.
+
 ## Checkpoints and metrics provenance
 
 A checkpoint is self-contained: it embeds the training configuration and
@@ -63,14 +67,44 @@ simulator, measured and understood.
 Real-data evaluation needs dependencies beyond the quick-start set — `pandas`,
 `openpyxl`, `xlrd`. Dataset roots are case-sensitive.
 
+## Where the documentation splits
+
+`ARCHITECTURE.md` is the **producer** side: dimensions, blocks, heads, the loss
+algebra, the optimiser, and what the validation table measures. It states its
+formulas symbolically so a `resize_model.py` resize does not falsify it.
+
+The **consumer** side — the three spaces, the Kovatchev constants, the
+quantile-assembly algebra, the decode recipe — is `../SPEC/inference.md`, and
+`ARCHITECTURE.md` defers to it by name rather than restating it. When the two
+appear to touch, the spec wins. `docs/INFERENCE.md` is the stub that routes
+there and lists where each concern is implemented in the repository.
+
+The README is the front door and carries the results tables; it is the only one
+of the three written for someone who has not read the code.
+
 ## Publishing decisions
+
+Public at <https://github.com/0xdeadf1sh/T1DMAI>, single branch `main`. History
+begins at the initial import — there is nothing before it, so a file overwritten
+prior to that commit is unrecoverable.
 
 - **Weights are never in the git tree.** All `.pt`/`.pth` are gitignored and
   shipped out of band. The inference documentation describes the checkpoint
   *format*, not a bundled file.
+- **Distribution archives are gitignored** (`*.tar.gz`). `T1DMAI_models.tar.gz`
+  is ~2.7 GB and sits in the repository root; the README links it rather than
+  committing it.
 - **Generated figures and reports are gitignored wholesale** — on the order of a
-  gigabyte of regenerable PNGs, referenced by no shipped document. The source
-  scripts and small JSON summaries stay.
+  gigabyte of regenerable PNGs under `figures/`, `models/*/` and
+  `metrics/**/figures/`. The source scripts stay. The one exception is
+  `screenshots/`, which is committed: `make_readme_figures.py` writes the six
+  light/dark PNGs the README embeds, and those must survive a fresh clone or the
+  README renders broken. Keep it to figures the README actually references.
+- **The JSON summaries are gitignored too** — `metrics/*.json` and
+  `models/comparison/data/`. So the numbers in the README's Results tables have
+  no in-tree source: they come from the models tarball, and a reader without it
+  cannot re-derive them. Deliberate, and worth revisiting if the tables are ever
+  challenged.
 - `T1DMSIM` ships as a documented external clone; the local symlink is
   gitignored.
 - MIT, with a prominent research-only, not-a-medical-device banner atop the
