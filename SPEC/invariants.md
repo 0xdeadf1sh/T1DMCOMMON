@@ -245,6 +245,165 @@ succeeds.
 The same applies to the phase origin of the circadian bins: which bin is midnight
 must be stated, not inferred.
 
+### 6.1 The metric levels
+
+*Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMAI` computes these metrics; a forecast
+scored on the phone keys off the same four levels, or the two accuracy figures
+are not comparable. `T1DMSERVER` scores nothing and reads no band edge.*
+
+Two of the levels above carry four names — one pair for the level metrics, one
+for the excursion detectors:
+
+| level | value | governs |
+| --- | --- | --- |
+| `METRIC_BAND_TAU_LO` | `0.25` | lower edge of the band the level metrics score against (§6.2) |
+| `METRIC_BAND_TAU_HI` | `0.75` | its upper edge |
+| `HYPO_ALARM_QUANTILE_TAU` | `0.25` | the lower band edge whose dip below the hypo threshold raises the scored hypo alarm |
+| `HYPER_ALARM_QUANTILE_TAU` | `0.75` | the upper band edge whose rise above the hyper threshold raises the scored hyper alarm |
+
+Each is a **level resolved to a position by lookup** — the index is wherever that
+value sits in the tuple above, never a literal `2` or `4`. The indirection costs
+nothing and buys everything: a fan re-levelled without its consumers being
+re-pointed still parses, still validates, and scores a different quantile
+throughout.
+
+The two lower entries are levels below `0.5`, the two upper above, and all four
+are members of the tuple. `T1DMAI` asserts exactly that at import; a consumer
+elsewhere owes the same check, because a level absent from the tuple has no
+position and cannot announce its own absence.
+
+**The two pairs are numerically equal today and separately named on purpose.**
+The band a metric scores against and the envelope an alarm reads are independent
+choices, and either may move without the other. Do not fold them into one
+constant, and do not read today's equality as an alias.
+
+**None of the four is descriptor-carried.** Unlike the risk constants of §4 they
+are a property of the evaluation rather than of a checkpoint, so no exported
+descriptor ships them and no consumer can read them off one. Each holds its own
+copy, and this section fixes the values those copies take.
+
+The alarm reads a **band edge rather than the median** deliberately: the lower
+envelope crosses a hypo threshold before the median does, and the upper crosses a
+hyper threshold likewise, so an excursion is scored on its possibility rather
+than on its expectation. Every other metric — RMSE, MAE, MARD, Clarke, CG-EGA,
+skill against persistence — scores the band projection of §6.2 instead.
+
+What the edge is compared *against* is not fixed here. It is the consumer's own
+hypo and hyper threshold: a fixed clinical pair in `T1DMAI`'s validation table,
+the patient's configurable bands on the phone (see *Accepted divergences* 3).
+
+### 6.2 The band projection
+
+*Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMSERVER` scores nothing.*
+
+A forecast is a fan and not a line, so the effective point forecast the level
+metrics score is the band point nearest the truth:
+
+```
+pred_eff = clip(truth, q[METRIC_BAND_TAU_LO], q[METRIC_BAND_TAU_HI])
+```
+
+Three properties, all definitional:
+
+- **zero error** wherever the truth lies inside the band;
+- **the distance to the nearer edge** wherever it lies outside;
+- a **degenerate band** (`lo == hi`) returns that common value, so the projection
+  reduces to a point forecast exactly — score a collapsed fan and the median-line
+  numbers come back unchanged.
+
+The projection replaces the prediction fed to the metrics and nothing else. Every
+downstream formula is untouched, which is what makes the two bases comparable at
+all.
+
+Because a wider band can only lower the error, a band-projected figure means
+nothing on its own. Two numbers travel with it: the **realized coverage**, the
+fraction of truth falling inside the band, whose target is
+`METRIC_BAND_TAU_HI − METRIC_BAND_TAU_LO`, and the **mean edge-to-edge width** in
+mg/dL. A band widened until it swallows every truth scores a flawless zero, and
+those two are what expose it.
+
+The basis is part of every figure's identity. A band-projected error and a
+median-line error are different quantities measured on one forecast: report both
+if you wish, never in a single column, and never against an outside number
+without naming which basis yours is.
+
+### 6.3 CG-EGA anchoring and window
+
+*Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMSERVER` scores nothing.*
+
+CG-EGA scores a point-error grid and a rate-of-change grid jointly, so it needs a
+step *before* the forecast's first step to difference against. That step is the
+**persistence value** — the measured BG at the forecast's `made_at`, the same
+anchor the model's flat prior departs from — and never the first forecast step or
+a zero:
+
+```
+dy[t] = (y[t] − y[t−1]) / 5          y[−1] := the persistence anchor
+```
+
+for the truth and the forecast alike, in mg/dL per minute. The `5` is §1's grid
+in minutes — one forecast step, not the horizon. Every step in the window
+therefore carries a rate, the first included; a consumer that begins at `t = 1`
+instead scores one step fewer on a different alignment, which is not this
+statistic. A mismatched anchor — one lifted from another cycle — corrupts `dy`
+only at `t = 0`, but that is the step at which a fast fall is most decisive.
+
+CG-EGA is scored over the **whole forecast window**, every step from first to
+last, yielding one accurate/benign/erroneous triple per glycaemic region. The
+level metrics of §6.2 are reported per horizon; this one is not. A CG-EGA
+computed at a single horizon is a different statistic and must not be published
+under the same name.
+
+Both grids take the **truth** as their reference axis. A point's glycaemic region
+is that of its true BG, never of its forecast, and the rate-of-change widening of
+the point grid's acceptance band follows the truth's `dy`. Transposing the two
+trajectories yields a well-formed table of a different statistic: points are
+re-bucketed between the regions, so every denominator moves and the percentages
+shift in both directions at once. The two are not comparable, and neither may be
+published under this name unless it reads the truth.
+
+**What this suite implements is the `dotXem/CG-EGA` reimplementation's grid, not
+Kovatchev's published one.** Both repositories transcribe `dotXem`. That is the
+deliberate choice: matching each other bit for bit is what makes the phone's panel
+and the trainer's validation table one statistic, which is what this section
+exists to guarantee, and it is worth more here than agreement with a published
+figure nobody in this suite is being scored against.
+
+It is a choice with a cost, and the cost is not symmetric. On four points the
+grids differ, and **two of the four under-report danger**. No figure produced here
+may be quoted against a published CG-EGA value without stating them.
+
+- **The rate widening is not directional.** The published grid widens *only the
+  upper* limits of `A_P`/`B_P`/`D_P` when the reference is falling, and *only the
+  lower* when it is rising — the asymmetry is the point, since the allowance pays
+  for interstitial lag. Both implementations here apply one `mod` to both bounds.
+  **Safety-relevant:** the cases it misclassifies concentrate at a true BG at or
+  below 70 with a rising reference, where the published grid calls an upper-`D`
+  failure-to-detect and this suite calls it `A`.
+- **The `lD` cell of the hyperglycaemia benign filter.** This suite marks it
+  benign; the published grid marks it erroneous — failure to detect a rise while
+  already hyperglycaemic. The paper's own totals settle it without reading its
+  figure: with hyper benign at 9 % the stated weighted `A` = 84.6 % and `B` = 9.3 %
+  both reproduce; at 10 % the second becomes 9.7 %. **Safety-relevant:** it moves
+  points from erroneous to benign, in hyperglycaemia.
+- **The upper-`C` boundary.** Published `1.03·U + 107.9`; here `(22/17)·U +
+  (180 − 70·22/17)`. Same anchor at `(70, 180)`, different slope.
+- **The anchor.** The shared persistence anchor above is this suite's own choice;
+  `dotXem` differences each series against itself. A forecast has no step before
+  its first, so an anchor must come from somewhere, and taking the measured value
+  keeps both rates on one origin — at the cost of a transient at `t = 0`. This one
+  is a considered choice and is not a defect.
+
+Correcting the first three would make this suite literature-comparable, and would
+have to move both implementations together or the guarantee above is lost. That
+is a live option, not a closed one; what is settled is that neither repository may
+claim the published grid while implementing this one.
+
+One consequence of §6.2 is worth stating outright: where the truth lies inside
+the band the projection *equals* the truth, so the rate term inherits the truth's
+own derivative there. The rate grid is scored only where the band actually
+missed.
+
 ## 7. Authority and ordering
 
 *Binds: `T1DMDROID` ↔ `T1DMSERVER`.*
@@ -314,3 +473,13 @@ wrong. None should stay open.
 
 3. **Day boundary for daily aggregates.** §2 requires UTC or local to be stated
    per metric. Confirm against the statistics implementation in `T1DMDROID`.
+
+4. **The phone's predictive alarm and the scored alarm read different bases.**
+   §6.1 fixes the scored hypo/hyper alarm on the τ=`0.25`/`0.75` band edges, and
+   `T1DMAI` computes recall and precision that way. `T1DMDROID`'s shipped
+   predictive alert reads the **median** line instead
+   (`BgGlanceComputer.findCrossings`), and its dose-calculator fan reads the
+   τ=`0.05`/`0.95` extremes (`calc/…/RollingForecaster.kt`). Neither is wrong on
+   its own terms, and both bases are defensible — but a recall figure measured on
+   the band edge does not describe the alarm the patient actually receives.
+   Record which basis the phone's alarm reads, and score it on that one.

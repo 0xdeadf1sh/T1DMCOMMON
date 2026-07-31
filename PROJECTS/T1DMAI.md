@@ -79,6 +79,13 @@ quantile-assembly algebra, the decode recipe — is `../SPEC/inference.md`, and
 appear to touch, the spec wins. `docs/INFERENCE.md` is the stub that routes
 there and lists where each concern is implemented in the repository.
 
+One part of the validation table is no longer T1DMAI's alone. The four metric
+levels, the band projection, and the CG-EGA anchoring and window are shared with
+`T1DMDROID`, which scores its own forecasts against them, so they are defined in
+`../SPEC/invariants.md` §6.1–6.3. `config.py` holds the implementation; a document
+here that states what those levels are, rather than which name to import, is a
+second copy.
+
 The README is the front door and carries the results tables; it is the only one
 of the three written for someone who has not read the code.
 
@@ -92,7 +99,7 @@ prior to that commit is unrecoverable.
   shipped out of band. The inference documentation describes the checkpoint
   *format*, not a bundled file.
 - **Distribution archives are gitignored** (`*.tar.gz`). `T1DMAI_models.tar.gz`
-  is ~2.7 GB and sits in the repository root; the README links it rather than
+  is ~1.9 GB and sits in the repository root; the README links it rather than
   committing it.
 - **Generated figures and reports are gitignored wholesale** — on the order of a
   gigabyte of regenerable PNGs under `figures/`, `models/*/` and
@@ -109,6 +116,44 @@ prior to that commit is unrecoverable.
   gitignored.
 - MIT, with a prominent research-only, not-a-medical-device banner atop the
   README.
+
+## The CG-EGA columns in every training record are void
+
+`train.py` writes nine `cgega_*` keys into each checkpoint's `val_history` and
+into `logs/validation_log.csv` at validation time, and its call site passes
+reference then prediction. Every such column already on disk is nonetheless the
+transposed statistic — reference and prediction reversed — and none of it can be
+recomputed, each being the record of a training run that no longer exists to be
+re-scored. Only a retrain replaces those numbers.
+
+One flag decides whether those columns are published. `make_figures.py` declares
+`CGEGA_COLUMNS_TRUSTWORTHY`, `make_card.py` imports it rather than declaring a
+second, and while it is false the CG-EGA panel drops out of `fig05_clinical`,
+`fig13_cgega_regions` is not written at all, the three `cgega_ap_*` keys leave
+`summary.json`, and the card's six CG-EGA rows are omitted with the card's height
+scaled so the remaining table keeps its pitch. It binds by value at import, so
+monkeypatching one module at runtime does not reach the other.
+
+The flag tracks the logs, not the source. Set it true only for a tree whose
+`logs/validation_log.csv` a retrain has regenerated; a run that merely re-renders
+existing logs must leave it false.
+
+The report path is unaffected: `realdata/metrics.py` recomputes CG-EGA from stored
+forecasts, so `metrics/**/stats.json` and the READMEs built from them hold the
+correct statistic. Treat the training-log columns as void rather than patching
+them, and never compare a card figure against a report figure.
+
+The shipped `models/` tree carries no `metrics_*/augmented/`. That regime is the
+one report `metrics/rebuild_all.sh` does not build, and its `stats.json` carries
+CG-EGA, so an `augmented/` obtained any way other than a fresh
+`metrics/augmented/build_report.py` run puts a transposed report inside a
+corrected tree. `augexp.json` and `shift15.json` carry no CG-EGA block and are
+unaffected.
+
+Whether a tree's region partition is anchored on truth is checkable without
+rerunning anything. The region is decided by the reference trajectory alone, so
+the CG-EGA per-region share must be identical across all twelve variants and must
+track each cohort's own hypoglycaemia prevalence, not the model's predicted rate.
 
 ## Working in this project
 

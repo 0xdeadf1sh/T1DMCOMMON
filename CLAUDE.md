@@ -205,6 +205,7 @@ Changing any of these in one repository obliges you to check its counterparts:
 | The two risk spaces | `SPEC/invariants.md` §4 | all four |
 | Meal-appearance and insulin-action curve mathematics | `SPEC/invariants.md` §5 | all four |
 | Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID`, displayed by `T1DMSERVER` |
+| The metric levels, band projection, CG-EGA anchoring | `SPEC/invariants.md` §6.1–6.3 | `T1DMAI` ↔ `T1DMDROID` |
 | Authority, `client_id`, `updated_at` ordering | `SPEC/invariants.md` §7 | `T1DMDROID` ↔ `T1DMSERVER` |
 | Statistics definitions | `SPEC/http-api.md` (Stats) | computed by `T1DMDROID`, displayed by `T1DMSERVER` |
 | The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
