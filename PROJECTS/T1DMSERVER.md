@@ -78,9 +78,8 @@ appliance and must not face the open internet.
 
 Four themes — Tron Legacy, Umbrella Corp, Hello Kitty, Windows XP — each with its
 own palette, animations, boot sequence, and glyph set, hot-swappable at runtime.
-Panes: Dashboard, Data, Models, Notes, Sessions, Device, Developer, Logs,
-Settings, Help. `Tab` cycles panes, `t` cycles themes, `h` or `?` opens help, `q`
-quits.
+Panes: Dashboard, Data, Models, Sessions, Device, Developer, Logs, Settings,
+Help. `Tab` cycles panes, `t` cycles themes, `h` or `?` opens help, `q` quits.
 
 Rendering is demand-driven: the UI idles near zero cost and wakes on input, a data
 event, or a live animation. Layout reflows from a wide multi-panel view down to a

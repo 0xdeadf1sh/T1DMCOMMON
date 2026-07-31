@@ -29,7 +29,6 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [Dose event](#dose-event)
   - [Basal schedule](#basal-schedule)
   - [Prediction](#prediction)
-  - [Note](#note)
   - [Photo (metadata)](#photo-metadata)
   - [Alert](#alert)
   - [Model](#model)
@@ -41,7 +40,6 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [PUT /v1/basal-schedule](#put-v1basal-schedule)
   - [PUT /v1/predictions](#put-v1predictions)
   - [PUT /v1/stats](#put-v1stats)
-  - [POST /v1/notes](#post-v1notes)
   - [POST /v1/photos](#post-v1photos)
   - [POST /v1/alerts](#post-v1alerts)
 - [Read endpoints (`ro` or `rw`)](#read-endpoints-ro-or-rw)
@@ -51,7 +49,6 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [GET /v1/basal-schedule](#get-v1basal-schedule)
   - [GET /v1/predictions](#get-v1predictions)
   - [GET /v1/predictions/latest](#get-v1predictionslatest)
-  - [GET /v1/notes](#get-v1notes)
   - [GET /v1/alerts](#get-v1alerts)
   - [GET /v1/photos](#get-v1photos)
   - [GET /v1/photos/{id}](#get-v1photosid)
@@ -71,32 +68,31 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   five-minute grid: `ts % 300000 == 0`. The phone snaps a meal or dose event to
   the nearest grid point before sending it; an off-grid `ts` is rejected with
   `400` on [`POST /v1/ingest`](#post-v1ingest), [`PUT /v1/meals`](#put-v1meals),
-  and [`PUT /v1/doses`](#put-v1doses). Notes and alerts carry a wall-clock `ts`
-  and are not snapped.
+  and [`PUT /v1/doses`](#put-v1doses). Alerts carry a wall-clock `ts` and are
+  not snapped.
 - **`tz_offset`** is the client's UTC offset in minutes at the record's
   timestamp (e.g. `-300` for UTC−5), carried alongside the timestamp for
-  local-time rendering. Samples, meal and dose events, basal slots, and notes
-  each carry one.
+  local-time rendering. Samples, meal and dose events, and basal slots each
+  carry one.
 - **Phone-authored identity.** Every physiologic record is authored on the
-  phone. A sample is keyed by its grid `ts`; a meal, dose, basal slot, note, or
-  alert carries a phone-minted `client_id`, unique and stable for the record's
-  life. The server's own integer `id` is assigned internally and is never
-  accepted on a write.
+  phone. A sample is keyed by its grid `ts`; a meal, dose, basal slot, or alert
+  carries a phone-minted `client_id`, unique and stable for the record's life.
+  The server's own integer `id` is assigned internally and is never accepted on
+  a write.
 - **Client `updated_at` is verbatim.** The millisecond `updated_at` a write
   carries is the phone's clock; the server stores and returns it exactly as
   sent, never re-stamping it. It is the ordering key for the idempotent upsert:
   a redelivery with an equal or older `updated_at` is a no-op, a newer one
   replaces the record in place. The guard is strictly-newer for meals, doses,
-  basal slots, notes, predictions, and statistics blocks.
+  basal slots, predictions, and statistics blocks.
   [`POST /v1/ingest`](#post-v1ingest) is the exception: it accepts an
   equal-or-newer `updated_at`, so two partial fills of one grid slot sharing a
   single `updated_at` both land.
 - **`received_at` never crosses the wire.** The server's internal arrival stamp
   for a phone-authored record is present in neither a read response nor a stream
   frame. The server-assigned `id` and `created_at` are read-only but *are*
-  surfaced, on the records that carry them — [Note](#note),
-  [Photo](#photo-metadata), and [Alert](#alert). A meal, dose, basal slot, or
-  prediction carries neither.
+  surfaced, on the records that carry them — [Photo](#photo-metadata) and
+  [Alert](#alert). A meal, dose, basal slot, or prediction carries neither.
 - **Storage units are fixed:** blood glucose in mg/dL; heart rate in bpm, steps
   as a count, and mood as a small integer; `sleep` and `exercise` are stored as
   plain scalar magnitudes. The mg/dL ↔ mmol/L toggle is display-only and never
@@ -108,14 +104,12 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   the event `ts`; a parametric meal or dose instead carries its curve parameters
   and leaves `custom_curve` `null`.
 - **Null asymmetry.** On a write (phone → server) an absent optional field may
-  be omitted or sent as explicit `null` — the two are equivalent — except
-  `tz_offset` on [`POST /v1/notes`](#post-v1notes), which must be omitted
-  rather than nulled. For a sample, either form leaves the stored column
-  untouched. On a read (server → phone) a missing value is explicit `null`,
-  never omitted. This holds for the optional curve parameters of a
-  [meal](#meal-event) or [dose](#dose-event) event too — the key is always
-  present on the REST read and on the stream frame alike — even though a
-  writer may omit it.
+  be omitted or sent as explicit `null` — the two are equivalent. For a sample,
+  either form leaves the stored column untouched. On a read (server → phone) a
+  missing value is explicit `null`, never omitted. This holds for the optional
+  curve parameters of a [meal](#meal-event) or [dose](#dose-event) event too —
+  the key is always present on the REST read and on the stream frame alike —
+  even though a writer may omit it.
 
 ## Authentication
 
@@ -332,17 +326,6 @@ and [dose](#dose-event) events.
   `bin_hours` wide; `predicted_hour` is the predicted hour-of-day and
   `resultant_r` the concentration of that belief (`0..=1`).
 
-### Note
-
-```json
-{ "id": 7, "client_id": "018f9c8a-...-c3", "ts": 1735689600000, "tz_offset": 0, "text": "felt low before lunch", "updated_at": 1735689605000, "created_at": 1735689601000 }
-```
-
-A note keeps its wall-clock `ts` and is editable; `client_id` is its identity
-and `updated_at` orders edits. `id` is the server's internal row id and
-`created_at` its server-side insertion stamp; both are read-only and survive an
-edit unchanged.
-
 ### Photo (metadata)
 
 ```json
@@ -489,9 +472,9 @@ Request:
 `ts`, `tz_offset`, and `updated_at` are required; the six physiologic scalars
 are optional. `updated_at` is the phone's clock and is stored verbatim; the row
 is upserted on `ts`, and a partial redelivery re-applies when its `updated_at`
-is equal or newer, and is ignored when older. Predictions and notes are written
-through their own endpoints ([`PUT /v1/predictions`](#put-v1predictions),
-[`POST /v1/notes`](#post-v1notes)), not embedded here.
+is equal or newer, and is ignored when older. Predictions are written through
+their own endpoint ([`PUT /v1/predictions`](#put-v1predictions)), not embedded
+here.
 
 Response `200`:
 
@@ -691,27 +674,6 @@ Response `200`:
 { "ok": true, "window": "7d" }
 ```
 
-### POST /v1/notes
-
-Request:
-
-```json
-{ "client_id": "018f9c8a-...-c3", "ts": 1735689600000, "tz_offset": 0, "text": "note body", "updated_at": 1735689605000 }
-```
-
-`client_id`, `ts`, `text`, and `updated_at` are required. `tz_offset` is
-optional only here — every other write that carries one requires it — and it
-must be *omitted* rather than nulled: an absent key defaults to `0`, an
-explicit `null` is rejected. A note keeps its wall-clock `ts` and is editable —
-keyed by `client_id`, a newer `updated_at` replaces its text in place. Fans out
-a `note` event to every session except the origin.
-
-Response `200`:
-
-```json
-{ "ok": true, "id": "018f9c8a-...-c3" }
-```
-
 ### POST /v1/photos
 
 `multipart/form-data` with two parts: a text field `ts`, and an image file in a
@@ -877,16 +839,6 @@ Response `200`:
 { "prediction": { "made_at": 1735689600000, "…": "…" } }
 ```
 
-### GET /v1/notes
-
-Query: `from`, `to` (inclusive bounds on `ts`). Newest first.
-
-Response `200`:
-
-```json
-{ "notes": [ { "id": 7, "client_id": "018f9c8a-...-c3", "ts": 1735689600000, "tz_offset": 0, "text": "…", "updated_at": 1735689605000, "created_at": 1735689601000 } ] }
-```
-
 ### GET /v1/alerts
 
 Query: `from`, `to`. Newest first.
@@ -1026,12 +978,10 @@ Every write is idempotent on its phone-minted key, so a replay is safe to
 interrupt and resume, and cannot duplicate a record.
 
 A teardown discards every record the store holds, not only those the replay
-above restores: the notes, predictions, alerts, and photo binaries written
-through [`POST /v1/notes`](#post-v1notes),
-[`PUT /v1/predictions`](#put-v1predictions),
-[`POST /v1/alerts`](#post-v1alerts), and [`POST /v1/photos`](#post-v1photos)
-are gone with the rest, and exist on the new store only once re-posted through
-those same endpoints. Model artifacts are the sole exception — they live on
+above restores: the predictions, alerts, and photo binaries written through
+[`PUT /v1/predictions`](#put-v1predictions), [`POST /v1/alerts`](#post-v1alerts),
+and [`POST /v1/photos`](#post-v1photos) are gone with the rest, and exist on the
+new store only once re-posted through those same endpoints. Model artifacts are the sole exception — they live on
 disk, survive the wipe, and are re-registered by the next scan.
 
 ---
@@ -1058,12 +1008,12 @@ before the stream is available again. The other server-initiated close follows
 a `lagged` frame, described below.
 
 Each event is a JSON object with a `"type"` discriminant and the event's fields
-inlined alongside it. The nine record types — `sample`, `prediction`, `note`,
-`photo`, `alert`, `meal`, `dose`, `basal_schedule`, and `stats` — carry,
-respectively, the [Sample row](#sample-row), [Prediction](#prediction),
-[Note](#note), [Photo](#photo-metadata), [Alert](#alert),
-[Meal event](#meal-event), [Dose event](#dose-event),
-[Basal schedule](#basal-schedule), and [Stats](#stats) schemas.
+inlined alongside it. The eight record types — `sample`, `prediction`, `photo`,
+`alert`, `meal`, `dose`, `basal_schedule`, and `stats` — carry, respectively,
+the [Sample row](#sample-row), [Prediction](#prediction),
+[Photo](#photo-metadata), [Alert](#alert), [Meal event](#meal-event),
+[Dose event](#dose-event), [Basal schedule](#basal-schedule), and
+[Stats](#stats) schemas.
 
 `stats` is the sole exception to the inlining: its frame carries `window` and
 `updated_at` at the top level and nests the pushed statistics block whole under
@@ -1072,7 +1022,7 @@ repeats its own `window` and `updated_at`. The REST shape differs —
 [`GET /v1/stats`](#get-v1stats) returns the metrics flat under a `stats` key —
 so a client must decode the two separately.
 
-A tenth type, `lagged`, carries no record and has no REST counterpart. The
+A ninth type, `lagged`, carries no record and has no REST counterpart. The
 server emits it when the broadcast buffer overran and events were dropped
 before this session could read them; `missed` is how many. It is the last frame
 of that socket — the server closes immediately after sending it. The dropped
@@ -1086,10 +1036,6 @@ high-water marks rather than trust its incremental cursor.
 
 ```json
 { "type": "prediction",     "made_at": 1735689600000, "model_id": "lstm-v3", "updated_at": 1735689605000, "horizon_steps": 24, "line": [112.0], "fan": [[…]], "circadian": { "probs": [0.0, 0.1], "predicted_hour": 7.5, "resultant_r": 0.8, "n_bins": 12, "bin_hours": 2.0 } }
-```
-
-```json
-{ "type": "note",           "id": 7, "client_id": "018f9c8a-...-c3", "ts": 1735689600000, "tz_offset": 0, "text": "felt low before lunch", "updated_at": 1735689605000, "created_at": 1735689601000 }
 ```
 
 ```json
