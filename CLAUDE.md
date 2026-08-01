@@ -209,6 +209,7 @@ Changing any of these in one repository obliges you to check its counterparts:
 | Authority, `client_id`, `updated_at` ordering | `SPEC/invariants.md` §7 | `T1DMDROID` ↔ `T1DMSERVER` |
 | Statistics definitions | `SPEC/http-api.md` (Stats) | computed by `T1DMDROID`, displayed by `T1DMSERVER` |
 | The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
+| The conformal band correction — its apply AND its fit | `SPEC/inference.md` §8.4 | `T1DMAI` ↔ `T1DMDROID` |
 
 Anything on that list is a cross-repository change. Read
 `skills/shared-contract-change` before touching it.

@@ -494,16 +494,54 @@ bands     = f_inv(q_tau)                  # (P, S, 7) mg/dL band edges
 At the 2 h default, `P·S = 4 · 6 = 24` steps = 2 h at 5-min cadence. Both are
 clamped into `[BG_CLAMP_MIN, BG_CLAMP_MAX]` by `f_inv`.
 
-### 8.4 Optional conformal recalibration
+### 8.4 Conformal recalibration
 
-If `ckpt['conformal_delta']` is present (per-`(step, τ)`, shape `(P·S, 7)`, in
-mg/dL, applied downstream of `f_inv`), you can recalibrate the band fan:
-`apply_quantile_conformal(bands, delta, median_idx=3)` adds `delta` and
-re-enforces three invariants — the **median is held fixed** (`delta[..., 3] = 0`),
-the **fan stays monotone** (no crossing), and an **all-zero delta is the
-identity**. The point forecast is untouched. A stored delta is fit on the
-**simulator** distribution; for real-world CGM it must be re-fit per cohort or
-omitted. Skipping it is bit-identical to the raw bands.
+A band correction `delta` is per-`(step, τ)`, shape `(P·S, 7)`, in mg/dL, applied
+downstream of `f_inv`. It may be carried by the checkpoint
+(`ckpt['conformal_delta']`) or fitted by the consumer; either way the same two
+halves govern it.
+
+**The apply.** `apply_quantile_conformal(bands, delta, median_idx=3)` adds
+`delta` and re-enforces three invariants — the **median is held fixed**
+(`delta[..., 3] = 0`), the **fan stays monotone** (no crossing), and an
+**all-zero delta is the identity**. The point forecast is untouched. Skipping the
+apply is bit-identical to the raw bands.
+
+**The fit.** Split conformal on a held-out calibration set of matured
+`(forecast, realized)` pairs. Per `(step, τ)` the residuals are
+`realized − band[step, τ]`; `delta[step, τ]` is the empirical `τ`-quantile of
+those residuals, taken as the **side-aware** 1-indexed order statistic over the
+`n` sorted residuals:
+
+```
+idx(n, τ) = floor((n+1)·τ)   for τ < 0.5      # a LOWER edge
+            ceil((n+1)·τ)    for τ > 0.5      # an UPPER edge
+```
+
+clamped into `[1, n]`; the median column is skipped. The two sides round opposite
+ways: `ceil` on a lower edge sits that edge one order statistic too high and lets
+realized BG escape below it more often than the nominal rate — anti-conservative
+on exactly the hypo edge, and worst at small `n`. Below the `n` at which every
+level resolves without clamping (**19** for the seven levels of
+`invariants.md` §6) the extreme levels' offsets are simply the minimum and the
+maximum of the residual sample, and the coverage they claim is arithmetic that
+never ran.
+
+Validity rests on **exchangeability** between the calibration set and the
+forecasts the delta is later applied to. Two consequences follow and are not
+optional: the split is **chronological** (older fitted on, newer held out and
+scored), and the held-out τ.05–.95 coverage is **reported beside the mean band
+width**, per `invariants.md` §6.2 — a band widened until it swallows every truth
+covers perfectly and forecasts nothing.
+
+**Where each fit lives.** A checkpoint-carried delta is fit on the **simulator**
+distribution; for real-world CGM it must be re-fit per cohort or omitted, and the
+export path ships none. `T1DMAI/conformal.py` fits the off-device object;
+`T1DMDROID` fits a per-patient one on device from the patient's own matured
+forecasts and applies it to **display only** — the raw fan is what the alarm
+engine, the dose calculator, the accuracy suite, the `prediction` table and the
+wire all carry. Both implementations are bound by the rule above, and because
+both publish τ.05–.95 coverage under one name, neither may change it alone.
 
 ---
 

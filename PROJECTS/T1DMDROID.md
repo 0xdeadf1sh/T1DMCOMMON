@@ -74,6 +74,18 @@ forecast before it has cleared that gate, but may never feed a dose.
 predict, and a configurable warm-up window on top of that suppresses forecasts
 until enough *measured* context has accrued.
 
+**The band correction is fitted here, per patient.** No exported descriptor
+carries a `conformal_delta`, so the fan the phone draws is the raw fan until the
+user asks for a fit from the Models drill-down. That fit is
+`../SPEC/inference.md` §8.4's, run in the Rust core over the patient's own
+matured `(forecast, realized)` windows at the model's own horizon, stored per
+model id, and reaching **one** surface: the BG panel's forecast overlay. Every
+classifier — the alarm engine, the calculator rails, the accuracy suite — reads
+the raw fan, the wire carries the raw fan, and the median never moves. A stored
+correction lapses one fitting window after it was made, and the artifact it was
+fitted on is unforgiving: replacing that artifact under the same id drops the
+correction and the forecasts it was fitted on together.
+
 ## Safety posture
 
 **Advisory only. The app never actuates insulin** — no pump, no closed loop. It
