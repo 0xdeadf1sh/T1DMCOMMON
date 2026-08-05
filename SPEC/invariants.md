@@ -52,6 +52,14 @@ Anything aggregating by day must state whether its day boundary is UTC or local,
 because the two disagree for a quarter of the world and across every DST
 transition.
 
+`T1DMDROID`'s statistics state it in the day-boundary block on `advanced_stats`
+in `crates/t1dm-core/src/stats.rs`: every day-keyed reduction there — the weekday
+× hour grid, the AGP ribbon, the six-hour diurnal buckets, MODD, ADRR and the
+day-to-day SD — is keyed on **local** time, resolved per sample from that
+sample's own `tz_offset`, so a window spanning a DST change or a flight keys each
+reading to the day the patient actually lived. CONGA needs no boundary: it
+compares readings a fixed lag apart, so a constant offset cancels.
+
 ## 3. Units and sign conventions
 
 *Binds: all four.*
@@ -471,10 +479,7 @@ wrong. None should stay open.
 2. **Circadian phase origin.** §6 requires the midnight bin to be named. Confirm
    against the exporter in `T1DMAI`.
 
-3. **Day boundary for daily aggregates.** §2 requires UTC or local to be stated
-   per metric. Confirm against the statistics implementation in `T1DMDROID`.
-
-4. **The phone's predictive alarm and the scored alarm read different bases.**
+3. **The phone's predictive alarm and the scored alarm read different bases.**
    §6.1 fixes the scored hypo/hyper alarm on the τ=`0.25`/`0.75` band edges, and
    `T1DMAI` computes recall and precision that way. `T1DMDROID`'s shipped
    predictive alert reads the **median** line instead
