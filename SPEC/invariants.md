@@ -204,15 +204,41 @@ What the rate *is* differs by channel, and the distinction is load-bearing:
   a gamma curve shaped by the glycaemic index, spread across the absorption
   window. It is *not* the moment of eating.
 - **Insulin — PK action rate.** Units of action per bucket across the duration
-  of insulin action. A rapid analogue is a gamma peaking near 50 minutes with a
-  four-to-five hour tail; a long-acting basal is a broad, near-flat Bateman curve
-  running twenty-four hours or more. It is *not* the injection instant, and *not*
-  a delivery schedule.
+  of insulin action. A long-acting basal is a broad, near-flat Bateman curve
+  running twenty-four hours or more. A rapid bolus takes one of two shapes, and
+  which one must be stated alongside it. It is *not* the injection instant, and
+  *not* a delivery schedule.
+
+A rapid bolus is drawn from one of two curve families:
+
+| family | authored by | shape |
+| --- | --- | --- |
+| Gamma | `T1DMSIM`, and every model pretrained on it | peak `(k−1)·θ`; per-analogue parameters and `√dose` scaling of `θ` and DIA defined in `simulator.BOLUS_VARIANTS` / `bolus_pk_for_dose` |
+| Loop/OpenAPS exponential | `T1DMDROID`'s clinical presets | parameterized by `(peak, DIA)`; no dose scaling |
+
+Models are pretrained on the gamma family and run on the exponential one. Every
+clinical preset carries `off_distribution: true`. A metric that injects one family
+against a record written in the other measures an insulin nobody takes.
 
 The glycaemic index shapes the carbohydrate gamma rather than scaling it: a high
-GI concentrates the appearance into an early peak, a low GI spreads it. Basal is
-auto-extended across the whole context and forecast window rather than treated as
-a discrete event, because background insulin is always present.
+GI concentrates the appearance into an early peak, a low GI spreads it. The
+mapping is defined here, because `T1DMDROID` and `T1DMSERVER` each implement it:
+
+```
+g   = clamp(GI, 0, 100) / 100
+k   = 4.5 + (2.0 − 4.5) · g
+θ   = 30.0 + (15.0 − 30.0) · g
+dur = clamp(k · θ · 4, 120, 360)       # minutes
+```
+
+`GI 100 → (2.0, 15.0, 120 min)`; `GI 50 → (3.25, 22.5, 292.5 min)`. The duration
+clamp binds below about GI 31.
+
+Basal is auto-extended across the whole context and forecast window rather than
+treated as a discrete event, because background insulin is always present. Its
+Bateman rates are a modelling choice; only the duration of action is sourced.
+`T1DMSIM` emits glargine `ke = 0.058` or degludec `ke = 0.028` per patient;
+`T1DMDROID` and `T1DMSERVER` use `ka = 0.30, ke = 0.07` for every analogue.
 
 The trap is that both descriptions sum to the same total, so an implementation
 that places a whole bolus in the bucket it was injected in still reconciles
@@ -467,6 +493,14 @@ defect.
    and in-range tinting are fixed at 70/180 mg/dL, while the phone's bands are
    user-configurable and never cross the wire. Accepted: the console's rails are
    fixed reference lines, not a reflection of the patient's settings.
+
+4. **Two rapid-bolus curve families.** §5's gamma and exponential families
+   coexist by design: models are pretrained on the gamma, the phone's clinical
+   presets author the exponential, and each preset declares
+   `off_distribution: true`. Do not unify them — a patient injects a named
+   analogue, not the simulator's central values. `T1DMSERVER` implements no
+   exponential curve and renders a bolus from the resolved `custom_curve` the
+   phone sends; one arriving without it would be drawn as a gamma.
 
 ## Open questions
 
