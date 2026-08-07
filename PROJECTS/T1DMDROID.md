@@ -86,6 +86,26 @@ correction lapses one fitting window after it was made, and the artifact it was
 fitted on is unforgiving: replacing that artifact under the same id drops the
 correction and the forecasts it was fitted on together.
 
+**A classical baseline runs beside the exported models**, under `model_id`
+`ridge-cgm-iob-cob-v1`: direct multi-step ridge on twelve lagged CGM values plus
+causal IOB/COB, fitted on device from the patient's own history when the user
+presses the button on the Models panel. It is what makes a forecast-accuracy
+figure mean anything, so the fit reports held-out RMSE against persistence per
+horizon.
+
+From the app's side it is an ordinary model: it joins the running set, selecting
+it hands it the graph, the alert, the widget and the calculator rails as
+selecting any model does, it is scored by the same suite through the same §3.6
+gates, and it syncs under its own id — which the wire allows already, since
+`../SPEC/http-api.md` keys predictions on `(made_at, model_id)`.
+
+Three things about it are specific. It has no descriptor and no artifact, so it
+sits beside the discovered set rather than inside it, and outside the running
+cap. Its band is constitutive, not corrective — `../SPEC/inference.md` §8.4. And
+it is fitted on gapped history rather than the carry-forward series the neural
+cycle conditions on, because a filled gap is a flat stretch that never happened
+and a least-squares fit learns persistence from enough of them.
+
 ## Safety posture
 
 **Advisory only. The app never actuates insulin** — no pump, no closed loop. It
