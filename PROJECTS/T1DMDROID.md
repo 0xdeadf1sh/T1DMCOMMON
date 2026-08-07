@@ -87,11 +87,20 @@ fitted on is unforgiving: replacing that artifact under the same id drops the
 correction and the forecasts it was fitted on together.
 
 **A classical baseline runs beside the exported models**, under `model_id`
-`ridge-cgm-iob-cob-v1`: direct multi-step ridge on twelve lagged CGM values plus
-causal IOB/COB, fitted on device from the patient's own history when the user
-presses the button on the Models panel. It is what makes a forecast-accuracy
-figure mean anything, so the fit reports held-out RMSE against persistence per
-horizon.
+`ridge-cgm-iob-cob-v1`: direct multi-step ridge on twelve lagged CGM values,
+causal IOB/COB, and the committed carb appearance and insulin action summed over
+the next 30, 60 and 120 minutes — fitted on device from the patient's own history
+when the user presses the button on the model's own screen. It is what makes a
+forecast-accuracy figure mean anything, so the fit reports held-out RMSE against
+persistence per horizon.
+
+Those forward blocks are what make it respond to a logged dose at all. On-board
+alone is a scalar at the anchor, and doses snap to the *nearest* grid slot, so
+one landing after the anchor moved nothing until the next CGM sample arrived.
+They count every committed curve overlapping the window, including one starting
+after the anchor — the same information the neural model's prediction-zone
+channels carry. The cost is that the held-out RMSE is mildly optimistic and may
+not be quoted against a strictly-causal figure without saying so.
 
 From the app's side it is an ordinary model wherever a model is a fan: it joins
 the running set, selecting it hands it the graph, the alert and the widget as
