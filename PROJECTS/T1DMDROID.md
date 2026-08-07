@@ -93,18 +93,25 @@ presses the button on the Models panel. It is what makes a forecast-accuracy
 figure mean anything, so the fit reports held-out RMSE against persistence per
 horizon.
 
-From the app's side it is an ordinary model: it joins the running set, selecting
-it hands it the graph, the alert, the widget and the calculator rails as
+From the app's side it is an ordinary model wherever a model is a fan: it joins
+the running set, selecting it hands it the graph, the alert and the widget as
 selecting any model does, it is scored by the same suite through the same §3.6
 gates, and it syncs under its own id — which the wire allows already, since
 `../SPEC/http-api.md` keys predictions on `(made_at, model_id)`.
 
-Three things about it are specific. It has no descriptor and no artifact, so it
-sits beside the discovered set rather than inside it, and outside the running
-cap. Its band is constitutive, not corrective — `../SPEC/inference.md` §8.4. And
-it is fitted on gapped history rather than the carry-forward series the neural
-cycle conditions on, because a filled gap is a flat stretch that never happened
-and a least-squares fit learns persistence from enough of them.
+**It cannot drive the dose calculator.** `:calc`'s rolled search sizes its
+context from descriptor patch geometry and runs a graph forward per roll with the
+candidate dose in the prediction zone, so a model with neither a descriptor nor a
+graph cannot answer it. With the baseline selected the calculator, the ISF/ICR
+probe and the rolled display overlay fail closed — safe, but the refusal reads
+"no selected model", which names the wrong cause.
+
+Three other specifics. It has no descriptor and no artifact, so it sits beside
+the discovered set rather than inside it, and outside the running cap. Its band
+is constitutive, not corrective — `../SPEC/inference.md` §8.4. And it is fitted
+on gapped history rather than the carry-forward series the neural cycle
+conditions on, because a filled gap is a flat stretch that never happened and a
+least-squares fit learns persistence from enough of them.
 
 ## Safety posture
 
