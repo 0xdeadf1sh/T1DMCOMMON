@@ -37,6 +37,8 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [POST /v1/ingest](#post-v1ingest)
   - [PUT /v1/meals](#put-v1meals)
   - [PUT /v1/doses](#put-v1doses)
+  - [PUT /v1/cgm-sources](#put-v1cgm-sources)
+  - [GET /v1/cgm-sources](#put-v1cgm-sources)
   - [PUT /v1/basal-schedule](#put-v1basal-schedule)
   - [PUT /v1/predictions](#put-v1predictions)
   - [PUT /v1/stats](#put-v1stats)
@@ -189,6 +191,7 @@ is present and an absent optional is explicit `null`, [meal](#meal-event) and
   "ts": 1735689600000,
   "tz_offset": 0,
   "bg": 112.0,
+  "bg_source": "s_0f1e2d3c",
   "hr": 68.0,
   "steps": 30.0,
   "sleep": 0.0,
@@ -203,6 +206,38 @@ floating point except `mood`, which is an integer. `updated_at` is the phone's
 millisecond clock when the row was authored, stored verbatim. Carbohydrates,
 bolus, and basal are no longer sample columns — they are [meal](#meal-event)
 and [dose](#dose-event) events.
+
+`bg_source` names the CGM sensor `bg` came from — the authoritative source at
+the instant the row was authored (`SPEC/invariants.md` §7.1). It is a label on
+the reading, not a key: `ts` remains the primary key and a slot still holds one
+`bg`. `null` where the client did not supply one, which includes every row
+written before contract `0.4.0`.
+
+Its value is opaque and stable per sensor; the server compares it and never
+parses it. A change in `bg_source` between adjacent slots is a sensor change,
+which is the one thing a reader can conclude from it.
+
+### CGM source
+
+```json
+{
+  "id": "s_0f1e2d3c",
+  "family": "examplevendor",
+  "model": "examplevendor:m1",
+  "serial": "SN-EXAMPLE-0001"
+}
+```
+
+What a `bg_source` refers to, sent by [`PUT /v1/cgm-sources`](#put-v1cgm-sources)
+and stored verbatim. `id` is the only required field and the only one any behaviour depends on;
+`family`, `model` and `serial` are descriptive and each may be absent. Every
+value above is illustrative — no field here names a real vendor, model, or
+device.
+
+`serial` is the number printed on the sensor. A client that sends it puts a real
+device identifier into server storage, its backups, and the operator console;
+one that omits it loses nothing but the console's ability to name the physical
+sensor. Omitting it is not a contract change.
 
 ### Meal event
 
@@ -558,6 +593,34 @@ Response `200` — the stored `client_id`s, in input order:
 ```json
 { "ok": true, "ids": ["018f9c8a-...-a1"] }
 ```
+
+### PUT /v1/cgm-sources
+
+Batch upsert of [CGM sources](#cgm-source). Same batch convention as
+[meals](#put-v1meals).
+
+Request:
+
+```json
+[
+  { "id": "s_0f1e2d3c", "family": "examplevendor", "model": "examplevendor:m1", "serial": "SN-EXAMPLE-0001" }
+]
+```
+
+`id` is required; `family`, `model` and `serial` are optional and may be
+omitted or sent as `null`. Idempotent by `id`: a redelivery replaces the row's
+descriptive fields in place.
+
+A source the server has never seen is accepted, and so is a `bg_source` naming
+a source that was never sent — the label is stored either way. Refusing an
+unknown label would make ingest depend on the order two independent queues
+happened to drain, and drop a reading to protect a description of it.
+
+Fans out a `cgm_source` event to every session except the one that wrote, shaped
+`{"type":"cgm_source","sources":[…]}`.
+
+`GET /v1/cgm-sources` returns every source on record, oldest description first,
+as an array of [CGM source](#cgm-source) objects. Read access (`ro` or `rw`).
 
 ### PUT /v1/basal-schedule
 

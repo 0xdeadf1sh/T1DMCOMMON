@@ -469,8 +469,10 @@ alarm engine, and the wire. Another active source's readings reach nothing else.
 
 Authority implies activity; the converse does not hold.
 
-A sample carries no sensor id (`SPEC/http-api.md`), and needs none: one source
-is authoritative at a time.
+A sample carries `bg_source` (`SPEC/http-api.md`), naming the sensor its `bg`
+came from. It is a label, not a key: one source is authoritative at a time, so a
+slot still holds one reading. A change in it between adjacent slots is a sensor
+change.
 
 ---
 
