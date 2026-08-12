@@ -456,6 +456,22 @@ Consequence worth stating: if the phone's clock moves backwards, records it
 writes afterwards carry stamps older than what is stored, and the server will
 correctly ignore them. A backwards clock therefore freezes a record silently.
 
+### 7.1 CGM source authority
+
+*Binds: `T1DMDROID`.*
+
+`T1DMDROID` records several CGM sensors at once. Each is **active** — its
+readings are retained and the BG panel may be switched to it. Exactly one is
+also **authoritative**.
+
+The authoritative source is the sole input to the forecast, the statistics, the
+alarm engine, and the wire. Another active source's readings reach nothing else.
+
+Authority implies activity; the converse does not hold.
+
+A sample carries no sensor id (`SPEC/http-api.md`), and needs none: one source
+is authoritative at a time.
+
 ---
 
 ## Known deviations
