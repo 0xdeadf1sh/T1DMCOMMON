@@ -7,28 +7,47 @@ ExecuTorch artifact plus the descriptor that `T1DMDROID` loads. Python. MIT.
 Passive tooling — run by hand when a new model is wanted, not part of any running
 system.
 
-## The risk-v3 redesign
+## The risk-v4 redesign
 
-The current architecture (`ARCH_VERSION = 'risk-v3'`) made two changes that
-matter across the suite:
+What the current architecture (`ARCH_VERSION = 'risk-v4'`) carries that matters
+across the suite:
 
 **No input or target smoothing.** The causal Savitzky-Golay smoother was deleted
 outright. Inputs, the forecast target, and the anchor are the raw post-noise
-simulator signals, with glucose clamped to `[40, 400]` and carbohydrate/insulin
+simulator signals, with glucose clamped to `[10, 400]` and carbohydrate/insulin
 floored at zero. `scipy` is no longer a dependency.
 
 **Kovatchev re-anchored to `[40, 400]`** — see `../SPEC/invariants.md` §4 for the
-constants and the two-space rule. The euglycaemic zero-risk centre moved from
-about 112.5 to about 128 mg/dL as a result.
+constants, the two-space rule, and why the anchors are not the clamp. The
+euglycaemic zero-risk centre moved from about 112.5 to about 128 mg/dL as a
+result.
+
+**Position comes from RoPE alone.** ALiBi is gone: no additive per-head distance
+bias on the logits and no `alibi_slopes` tensor. QK-norm on Q and K stays.
+
+**Exercise is an input feature** — a carbohydrate-equivalent glucose-disposal
+curve in g/step, encoded log1p + z like carbohydrate, never risk-transformed and
+never rescaled. The real cohorts keep a zero exercise column by decision: neither
+Ohio's self-reported intensity nor AZT1D's device mode is wired to it. The wire's
+`exercise` is a plain scalar magnitude and does not feed the channel, so
+`../SPEC/invariants.md` §3 carries no exercise row and gains one only when
+something does.
+
+**The forecast is one case of a masked-BG objective.** A masked span at the right
+edge of the window is a forecast, one at the left edge a backcast, anything else
+infill. A `bg_masked` bit announces the masked set rather than leaving it
+inferable from position, and each masked patch carries its own one-sided,
+left-preferring anchor in place of one broadcast `last_bg`.
+`../SPEC/inference.md` holds the feature map, the patch geometry, the forward
+signature and the head's slot layout.
+
+**The configured capacity is medium** — `D_MODEL` 128, `N_LAYERS` 8, `N_HEADS` 8,
+set through `resize_model.py`.
 
 The clinical LBGI/HBGI indices in `T1DMSIM` deliberately stay on the published
 constants so they remain comparable to the diabetes literature. **A cross-repo
 reviewer will flag the duplication as drift — it is not.** That was an explicit
 decision: model risk space only.
-
-What *is* drift, and is tracked as a known deviation in the spec, is the third
-hardcoded copy in `T1DMDROID`, which is stale and decodes the current artifacts
-incorrectly.
 
 ## Cache and statistics seam
 
@@ -60,9 +79,13 @@ difference between families lives only in the metrics statistics, not in the
 comparison tables — a table that looks identical across families is expected, not
 a bug.
 
-Fine-tuning on real data lowers error on all three real cohorts while regressing
-simulator performance by a comparable margin: catastrophic forgetting of the
-simulator, measured and understood.
+**The archived checkpoints and exports are retired, not regenerated.** They sit
+with their manifest under `scratch/retired-alibi-risk-v3/`, which is gitignored
+and was never tracked. All twenty checkpoints carry an `alibi_slopes` tensor per
+layer and load through none of the strict load sites; every exported descriptor
+beside them stamps `arch_version risk-v3` with a `BG_CLAMP_MIN` of 40. No
+checkpoint and no export in the tree loads or decodes against the current
+architecture.
 
 Real-data evaluation needs dependencies beyond the quick-start set — `pandas`,
 `openpyxl`, `xlrd`. Dataset roots are case-sensitive.

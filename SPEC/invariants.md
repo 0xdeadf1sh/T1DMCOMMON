@@ -137,15 +137,20 @@ property, not a numerical convenience; do not "simplify" it to a zero.
 
 ### Model risk space
 
-The same family of transform, **re-anchored to the BG range the network was
-trained on**, `[40, 400]`. The model's input and output BG both live here.
+The same family of transform, **re-anchored for the network**. The model's input
+and output BG both live here.
 
-The current anchoring (`ARCH_VERSION = risk-v3`) is solved so that
+The current anchoring (`ARCH_VERSION = risk-v4`) is solved so that
 `f(40) = -√10` and `f(400) = +√10` — risk 100 at both rails:
 
 ```
 SCALE = 2.2211457449985317   POWER = 1.084   OFFSET = 5.540076976170212
 ```
+
+The anchors are not the clamp. BG is clamped to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`,
+which the descriptor carries beside the constants and which currently reaches
+below the low anchor: at `[10, 400]` the realised risk range is asymmetric,
+`[f(10), f(400)] = [-6.8198, +3.1623]`. Never assume `±√10` bounds a risk value.
 
 Note the consequence: the zero-risk centre moves from roughly 112.5 mg/dL in
 clinical space to roughly **128 mg/dL** in model space. The two transforms do not
@@ -172,7 +177,7 @@ scale. That is the pattern the constants themselves should follow.
 takes every model-path bound from it — the input clamp, the `f_inv` output clamp,
 and the rail-pinned degeneracy test alike. That last one is why the bounds cannot
 be assumed either: a rail-pin check against a fixed 20 mg/dL is meaningless for a
-model whose output cannot go below 40.
+model whose floor is the `BG_CLAMP_MIN` its own descriptor carries.
 
 ### Rules
 

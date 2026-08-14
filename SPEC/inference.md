@@ -31,7 +31,7 @@ normalization, the Kovatchev risk transform, and the quantile assembly. All of
 them are pure numeric, and every constant they need is tabulated in
 [§11](#11-reference-constants). There is **no input smoother** in the reference
 pipeline — the model consumes the raw signal directly (BG only clamped to
-`[BG_CLAMP_MIN, BG_CLAMP_MAX]`, carb/insulin floored at 0). A consumer may
+`[BG_CLAMP_MIN, BG_CLAMP_MAX]`, the other channels floored at 0). A consumer may
 pre-filter its own input; that is its choice to make and to document
 ([§7.1](#71-input-filtering-is-the-consumers-choice)).
 
@@ -61,7 +61,7 @@ thing when reimplementing inference.
 | space | representation |
 |---|---|
 | **(a) normalized z-space** | model **inputs**: per-channel z-scores. The BG input is `z(f(bg))` — Kovatchev risk **then** z-score. |
-| **(b) mg/dL physical** | the `last_bg` anchor, the true forecast in mg/dL, all clinical thresholds, the GUI. |
+| **(b) mg/dL physical** | the per-slot anchor, the true forecast in mg/dL, all clinical thresholds, the GUI. |
 | **(c) Kovatchev risk** | the BG input *before* its z-score (`f(bg)`), and **all model outputs** (`q_tau`, `median`). |
 
 The two bridges:
@@ -90,7 +90,7 @@ A training-produced checkpoint contains:
 
 | key | contents | needed for inference? |
 |---|---|---|
-| `arch_version` | e.g. `'risk-v3'` | provenance |
+| `arch_version` | e.g. `'risk-v4'` | provenance |
 | `loss_schema` | e.g. `'kendall-pinball-dilate-v3'` | provenance |
 | `step` | training step | provenance |
 | `model_state_dict` | live weights | base weights |
@@ -143,14 +143,15 @@ globals (from the checkpoint) and instantiate.
 |---|---|---|---|
 | `D_MODEL` | hidden width | `d_model` | `patch_embed.weight` rows |
 | `N_LAYERS` | transformer blocks | `n_layers` | count of `blocks.N.*` |
-| `N_HEADS` | attention heads | `n_heads` | `blocks.0.attn.alibi_slopes` length |
+| `N_HEADS` | attention heads | `n_heads` | `D_MODEL / HEAD_DIM` |
 | `HEAD_DIM` | `= D_MODEL // N_HEADS` | derive | `blocks.0.attn.q_norm.weight` length |
 | `FFN_DIM` | SwiGLU inner width | `ffn_dim` | `blocks.0.ffn.w1.weight` rows |
 | `PATCH_SIZE` | steps per patch = 6 | `patch_size` | `step_basis` rows |
-| `N_INPUT_FEATURES` | 3 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
-| `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 18 | derive | `patch_embed.weight` cols |
+| `N_INPUT_FEATURES` | 5 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
+| `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 30 | derive | `patch_embed.weight` cols |
 | `PREDICTION_PATCHES` | horizon patches | `prediction_patches` | — |
 | `MIN/MAX_CONTEXT_PATCHES` | 16 / 48 | `min/max_context_patches` | — |
+| `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
 | `BG_HEAD_HIDDEN` | head MLP width | — | `bg_head.0.weight` rows |
 | `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 3 | — | `step_basis` cols |
 | `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= K·(1+2·N_SPREADS)` |
@@ -160,8 +161,26 @@ released defaults — you must reproduce them exactly: `ROPE_BASE = 1000`, RMSNo
 `eps = 1e-6`, `QUANTILE_LEVELS = (.05, .1, .25, .5, .75, .9, .95)`,
 `BG_QUANTILE_SPREAD_MIN = 1e-3`, `BG_HEAD_MEDIAN_MODE = 'global'`,
 `BG_HEAD_MEDIAN_GLOBAL_DIM = 6`, `BG_HEAD_STEP_BASIS_TYPE = 'dct'`, and the
-Kovatchev constants (§5). The per-patch `step_basis` buffer **is** saved in the
-state dict; the global-median DCT basis is **not** — recompute it (§8.2).
+Kovatchev constants (§5).
+
+`BG_HEAD_MEDIAN_GLOBAL_DIM` is the median-basis dimension at a span of
+`PREDICTION_PATCHES` patches. Each span of `L` patches uses
+`G_L = max(1, ceil(BG_HEAD_MEDIAN_GLOBAL_DIM · L / PREDICTION_PATCHES))` columns —
+`2 / 3 / 5 / 6` at `L = 1 / 2 / 3 / 4`.
+
+`MAX_MASKED_PATCHES` (`M`) is the head's slot count and the training sampler's cap
+on the masked set. It sizes no weight — the BG head is applied per slot with shared
+weights — so it bounds what a consumer may ask for, not what the graph computes. It
+is a training-time choice, not a released constant: read it from
+`training_config['max_masked_patches']` and run each checkpoint at its own. A
+checkpoint that omits `training_config` loses it, and no tensor shape recovers it.
+
+The exported descriptor carries no `max_masked_patches`. The exported graph is cut
+to the trailing `PREDICTION_PATCHES` forecast and never gathers by `mask_idx`, so a
+descriptor consumer has no slot count to match.
+
+The per-patch `step_basis` buffer **is** saved in the state dict; the per-span
+median basis is **not** — recompute it (§8.2).
 
 ### 3.2 Block structure (pre-norm, 2 residual writes per block)
 
@@ -171,12 +190,14 @@ for block in blocks:
     x = x + attn(norm1(x))                    # RMSNorm -> TemporalSelfAttention
     x = x + ffn (norm2(x))                    # RMSNorm -> SwiGLU
 x = final_norm(x)                             # RMSNorm
-pred     = x[:, -PREDICTION_PATCHES:, :]      # slice the horizon patches
-coeff    = bg_head(pred).view(B, P, K, 1 + 2*N_SPREADS)
-head_raw = einsum('sk,bpkc->bpsc', step_basis, coeff)   # (B, P, PATCH_SIZE, 7)
-q_tau, median = assemble_quantiles(head_raw, last_bg)   # §8
+pred     = x.gather(1, mask_idx)              # (B, M, D_MODEL) — the masked patches
+coeff    = bg_head(pred).view(B, M, K, 1 + 2*N_SPREADS)
+head_raw = einsum('sk,bmkc->bmsc', step_basis, coeff)   # (B, M, PATCH_SIZE, 7)
+q_tau, median = assemble_quantiles(head_raw, anchor_bg, mask_idx)   # §8
 ```
 
+- The head reads the masked patches **by index**, never as a trailing slice: the
+  masked set may sit anywhere in the sequence (§4).
 - **RMSNorm** (no mean subtraction, no bias): `x / sqrt(mean(x², dim=-1) + eps) *
   weight`, `eps = 1e-6`, learned per-channel `weight` (init 1).
 
@@ -185,19 +206,20 @@ q_tau, median = assemble_quantiles(head_raw, last_bg)   # §8
 1. `q, k, v = w_q/w_k/w_v(x)` (no bias), reshaped to `(B, N_HEADS, T, HEAD_DIM)`.
 2. **QK-norm**: per-head `RMSNorm(HEAD_DIM)` (`q_norm` / `k_norm`, eps 1e-6) on
    `q` and `k`, **before** RoPE.
-3. **RoPE** on `q` and `k` (base 1000; §3.4).
-4. **ALiBi bias**: `alibi_bias[h,i,j] = -|i-j| · |slope_h|`, where
-   `slope_h = alibi_slopes[h].abs()`. **The stored slopes are trained and may be
-   negative — you MUST take the absolute value.** (A naive port that keeps the raw
-   sign flips a recency bias into an anti-recency bias.) Init was the geometric
-   series `slope_h = 2^(-8(h+1)/N_HEADS)`.
-5. **Additive mask**: `logits_mask = alibi_bias + struct`, where `struct` is `0`
-   where attention is allowed and `-inf` where blocked (§4).
-6. `attn = softmax(QKᵀ / sqrt(HEAD_DIM) + logits_mask) @ V`. In PyTorch this is
-   `F.scaled_dot_product_attention(q, k, v, attn_mask=logits_mask)`; the
-   `1/sqrt(HEAD_DIM)` scaling and the additive float mask are the only things a
-   reimplementation must reproduce.
-7. `out = w_o(concat_heads)`.
+3. **RoPE** on `q` and `k` (base 1000; §3.4). Position enters through RoPE alone:
+   the block carries no additive distance or positional bias.
+4. **Mask**: the boolean mask of §4 (`True = attend`), consumed as it stands. A
+   `(T, T)` mask broadcasts over batch and head; a per-sample `(B, T, T)` one must
+   gain the head axis — `(B, 1, T, T)` — before use, or `B` aligns onto the head
+   axis and head *b* reads sample *b*'s mask.
+5. `attn = softmax(QKᵀ / sqrt(HEAD_DIM) + mask) @ V`, with `-inf` at the blocked
+   positions. In PyTorch this is
+   `F.scaled_dot_product_attention(q, k, v, attn_mask=mask)` on the bool mask; the
+   `1/sqrt(HEAD_DIM)` scaling is the only thing a reimplementation must reproduce.
+6. `out = w_o(concat_heads)`.
+
+A state dict carrying `blocks.*.attn.alibi_slopes` predates `risk-v4` and does not
+load into this graph.
 
 ### 3.4 RoPE cache (`build_rope_cache(T, HEAD_DIM, base=1000)`)
 
@@ -228,27 +250,44 @@ shared across layers.
 
 ## 4. Attention mask
 
-Let `C = n_ctx` context patches, `P = PREDICTION_PATCHES` prediction patches,
-`T = C + P`. The boolean mask (`True = attend`) is **hybrid, not standard
-causal**:
+Every patch of a `T`-patch window is **visible** (its BG is observed), **masked**
+(its BG is withheld and the head predicts it) or **padding**. The boolean mask
+(`True = attend`) follows that labelling, not a position rule:
 
 ```
-Context    → Context      bidirectional   (full C×C block True)
-Prediction → Context      full            (every pred sees all ctx)
-Prediction → Prediction   bidirectional   (full P×P block True — NOT triangular)
-Context    → Prediction   BLOCKED         (False — no future leak)
+visible row → visible col    allowed   (bidirectional among evidence)
+visible row → masked  col    BLOCKED   (evidence never reads a prediction)
+masked  row → any real col   allowed   (a prediction reads everything)
+pad row / pad col            blocked, except the diagonal
 ```
 
-Only the top-right `C×P` quadrant (context rows, prediction columns) is `False`;
-everything else is `True`. Convert to the additive float mask by placing `-inf`
-where `False` and `0` where `True`, then add the ALiBi bias.
+Build it from a `(B, T)` visible bool and a `(B, T)` padding bool, in four lines,
+all four load-bearing:
 
-The prediction horizon is decoded **jointly** in one forward pass; there is no
-within-horizon causal triangulation, and future leak is prevented solely by the
-blocked context→prediction quadrant. The prediction patches are always the
-**last `P`** rows of the sequence. The model accepts any `n_ctx` in
-`[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[16, 48]` patches (8–24 h); build
-the mask with the actual `n_ctx` (`create_attention_mask(n_ctx, P)`).
+```python
+vis    = visible & ~is_pad
+masked = ~visible & ~is_pad
+attn   = vis[:, None, :] | masked[:, :, None]
+attn  &= ~is_pad[:, None, :]    # nothing reads a pad column
+attn  &= ~is_pad[:, :, None]    # a pad row reads nothing but itself
+attn[:, diag, diag] = True      # no all-False row, which would NaN the softmax
+```
+
+The mask goes to attention as bool (§3.3); nothing additive is materialized.
+Nothing is memoized either — the masked set varies per sample and no cheap key
+identifies it.
+
+A masked span ending at patch `T−1` is a **forecast**, one starting at patch 0 a
+**backcast**, anything else an **infill**: one objective, not three modes. Two
+spans never abut — one visible patch separates neighbours, and that separator is
+what makes the anchor (§7.4), the median basis (§8.2) and the span grouping well
+defined. The masked patches are decoded **jointly** in one forward pass, with no
+causal triangulation among them, and future leak is prevented solely by the
+blocked visible→masked direction. The model accepts any `n_ctx` in
+`[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[16, 48]` patches (8–24 h).
+
+`create_attention_mask(n_ctx, P)` remains as a shim for the right-edge forecast:
+it builds that visible bool internally and returns the `(T, T)` mask.
 
 ---
 
@@ -272,14 +311,15 @@ clinical space never decodes a forecast.
 The model constants are **a property of the checkpoint**, not of the domain, and
 therefore travel in the exported descriptor's `kovatchev` block: `SCALE`,
 `POWER`, `OFFSET`, `BG_CLAMP_MIN`, `BG_CLAMP_MAX`. Every (b)↔(c) crossing on the
-model path reads them from there — the BG input transform, the `last_bg` anchor,
+model path reads them from there — the BG input transform, the masked-patch anchors,
 and decoding `q_tau`/`median` back to mg/dL.
 
 A checkpoint re-anchored to a different physical BG range ships different
 constants, and decoding one against the other fails silently: the output stays
-finite and plausible while being wrong by tens of mg/dL. The current release
-(`arch_version = risk-v3`) is anchored on `[40, 400]`; against the superseded
-`risk-v2` constants a true 55 mg/dL decodes as 32 and a true 300 as 394.
+finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v4` is anchored on `[40, 400]` — `f(40) = −√10`,
+`f(400) = +√10` — while its clamp `[BG_CLAMP_MIN, BG_CLAMP_MAX]` is `[10, 400]`;
+the anchors are not the clamp. Against the superseded `risk-v2` constants a true
+55 mg/dL decodes as 32 and a true 300 as 394.
 
 A descriptor carrying no `kovatchev` block is therefore **rejected** rather than
 defaulted: there is no safe constant to fall back to.
@@ -306,19 +346,25 @@ check takes the descriptor: given the wrong range it cannot fire at all.
 
 ## 6. Normalization (raw ↔ z-score)
 
-Three channels, fixed order — the index **is** the model input-feature index:
+Four normalized channels, fixed order — the index **is** the model input-feature
+index:
 
 ```
-CHANNEL_NAMES = ['bg_absolute', 'carb_intake', 'insulin_combined']
-                #  feat 0        feat 1         feat 2
+CHANNEL_NAMES = ['bg_absolute', 'carb_intake', 'insulin_combined', 'exercise_equiv']
+                #  feat 0        feat 1         feat 2              feat 3
 ```
 
 Membership sets: `RISK_SPACE_CHANNELS = {'bg_absolute'}`,
-`SPARSE_LOG1P_CHANNELS = {'carb_intake', 'insulin_combined'}`.
+`SPARSE_LOG1P_CHANNELS = {'carb_intake', 'insulin_combined', 'exercise_equiv'}`.
+
+Input feat 4 (`bg_masked`, §7.3) is a bit, not a signal: no entry here, no
+statistics, no encoding.
 
 **Units.** BG in mg/dL; carb in **grams per 5-min step**; insulin in **units per
-5-min step**, with basal and bolus already **summed** into the single channel.
-One timestep = 5 min; one patch = 6 steps = 30 min.
+5-min step**, with basal and bolus already **summed** into the single channel;
+exercise as a **carbohydrate-equivalent glucose disposal in grams per 5-min
+step** — the trained scale, never rescaled to an intensity. One timestep = 5 min;
+one patch = 6 steps = 30 min.
 
 **normalize (raw → z):**
 
@@ -343,41 +389,44 @@ carb/ins   :  x = max( expm1( z·(std_c + 1e-8) + mean_c ), 0 )
 ```json
 { "bg_absolute":      {"mean": <risk-space>,  "std": <risk-space>},
   "carb_intake":      {"mean": <log1p-space>, "std": <log1p-space>},
-  "insulin_combined": {"mean": <log1p-space>, "std": <log1p-space>} }
+  "insulin_combined": {"mean": <log1p-space>, "std": <log1p-space>},
+  "exercise_equiv":   {"mean": <log1p-space>, "std": <log1p-space>} }
 ```
 
-The BG mean/std live in **risk space** (fit on `f(bg)`); carb/insulin in log1p
-space. Prefer the checkpoint's embedded stats — they are exactly what the model
-was trained with.
+The BG mean/std live in **risk space** (fit on `f(bg)`); the other three in log1p
+space. All four keys are required, each with `std > 0`. Prefer the checkpoint's
+embedded stats — they are exactly what the model was trained with.
 
 ---
 
 ## 7. Input construction (the frozen index map)
 
-Per timestep the features are `[bg_absolute, carbs, insulin]`
-(`N_INPUT_FEATURES = 3`). The output-channel → input-feature map is
-`CHANNEL_TO_FEAT = {0: 1, 1: 2}` (carb-channel 0 → feat 1, insulin-channel 1 →
-feat 2). BG (feat 0) is never overrideable.
+Per timestep the features are
+`[bg_absolute, carbs, insulin, exercise, bg_masked]` (`N_INPUT_FEATURES = 5`):
+feats 0–3 are §6's normalized channels in that order, feat 4 the per-patch mask
+bit (§7.3). The output-channel → input-feature map is
+`CHANNEL_TO_FEAT = {0: 1, 1: 2, 2: 3}` (carb-channel 0 → feat 1, insulin-channel 1
+→ feat 2, exercise-channel 2 → feat 3). BG (feat 0) is never overrideable.
 
 **Patch flatten order is step-major:** `(PATCH_SIZE, N_INPUT_FEATURES) →
 PATCH_DIM` via a C-contiguous reshape, i.e.
 
 ```
-flat_index = t · N_INPUT_FEATURES + feat        # t in [0, 6), feat in [0, 3)
-PATCH_DIM  = PATCH_SIZE · N_INPUT_FEATURES = 6 · 3 = 18
+flat_index = t · N_INPUT_FEATURES + feat        # t in [0, 6), feat in [0, 5)
+PATCH_DIM  = PATCH_SIZE · N_INPUT_FEATURES = 6 · 5 = 30
 ```
 
 ### 7.1 Input filtering is the consumer's choice
 
 The reference pipeline applies **no smoother**. Inputs, forecast target, loss and
 metrics all live in one raw post-noise space: the same raw BG is the model input,
-the forecast target and the `last_bg` anchor. BG is clamped to the descriptor's
-`[BG_CLAMP_MIN, BG_CLAMP_MAX]`; carb and insulin are floored at `0` (the `log1p`
-transform does this in `normalize`).
+the forecast target and the anchor. BG is clamped to the descriptor's
+`[BG_CLAMP_MIN, BG_CLAMP_MAX]`; carb, insulin and exercise are floored at `0` (the
+`log1p` transform does this in `normalize`).
 
 A consumer may denoise its own BG channel before normalization — a live CGM feed
 is noisier than the simulator's — but that is an application decision outside
-this contract, and one that moves the `last_bg` anchor with it. Any filter must
+this contract, and one that moves the anchor with it. Any filter must
 be **strictly causal**: reading `x[> t]` to estimate `x[t]` leaks the future into
 a forecast and invalidates every metric measured against it. A consumer that
 filters documents its own window and taps, in its own repository.
@@ -387,70 +436,105 @@ filters documents its own window and taps, in its own repository.
 `context` has shape `(n_ctx, PATCH_SIZE, N_INPUT_FEATURES)`, already normalized.
 From a raw history:
 
-1. Take the trailing raw per-step series for BG (mg/dL), carb (g/step), and
-   insulin (U/step, basal + bolus summed), length `n_ctx · PATCH_SIZE`, with
-   `n_ctx ∈ [16, 48]`.
-2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb/insulin at 0. Optionally pre-filter BG
-   (§7.1); the reference applies no filter.
-3. `normalize` each channel (BG via risk-z, carb/insulin via log1p-z).
-4. Reshape to `(n_ctx, 6, 3)`.
+1. Take the trailing raw per-step series for BG (mg/dL), carb (g/step), insulin
+   (U/step, basal + bolus summed) and exercise (carb-equivalent g/step), length
+   `n_ctx · PATCH_SIZE`, with `n_ctx ∈ [16, 48]`.
+2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
+   0. Optionally pre-filter BG (§7.1); the reference applies no filter.
+3. `normalize` each channel (BG via risk-z, the other three via log1p-z).
+4. Reshape to `(n_ctx, 6, 5)`: the four normalized channels in feats 0–3, feat 4
+   written by §7.3.
 
-### 7.3 Prediction-zone patches
+### 7.3 Masked patches
 
-The `P = PREDICTION_PATCHES` prediction patches are appended after the context:
+A masked patch withholds its BG and announces that it did:
 
-- **feat 0 (BG): always 0** — it is what the model predicts.
-- **feat 1 / feat 2 (carb/insulin): the no-dose baseline `normalize(0)`** for
-  that channel — **not** a literal `z = 0`. Because the sparse inverse routes
-  through `log1p`, a literal `z = 0` decodes to a phantom ≈0.39 g / ≈0.14 U per
-  step. Overwrite these slots with **announced** future doses (normalized) to
-  condition the forecast (a what-if, or a deployment where the pump schedule is
-  known).
+- **feat 0 (BG): 0** — it is what the model predicts.
+- **feat 4 (`bg_masked`): 1** in all `PATCH_SIZE` step-major columns of that
+  patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a
+  masked BG slot is an ordinary reading (≈142 mg/dL on the simulator pool), not a
+  sentinel — the masked set is announced, never inferred.
+- **feats 1–3 (carb / insulin / exercise): the announced plan.** A masked context
+  patch keeps its observed values. A future patch takes the no-event baseline
+  `normalize(0)` per channel. A literal `z = 0` routes through the sparse `log1p`
+  inverse and announces a phantom ≈0.47 g of carbohydrate, ≈0.15 U of insulin and
+  ≈0.025 g of exercise equivalent per step — `expm1` of each channel's fitted
+  mean, not the mean itself. Overwrite these slots with
+  **announced** future doses or sessions (normalized) to condition the forecast;
+  never write into them anything the patient did not announce.
 
-### 7.4 The `last_bg` anchor
+The `P = PREDICTION_PATCHES` future patches carry no observed BG at all, so all
+of them are masked. A masked set totals at most `MAX_MASKED_PATCHES` patches, and
+at least one patch of the window stays visible.
 
-`model.forward` requires a `(B,)` mg/dL anchor. It is simply the last context BG
-cell denormalized back to mg/dL:
+### 7.4 The per-slot anchor
+
+`model.forward` requires a `(B, M)` mg/dL anchor, one per masked patch. It is
+**one-sided and left-preferring**: the last step of the span's left neighbour, or
+the first step of the right neighbour when the span starts at patch 0. Every slot
+of one span carries the same value, so a slot near a span's right edge anchors
+past its nearest visible evidence — the geometry, not a defect. For the trailing
+forecast it is the last context BG cell.
+
+An anchor cell is always a **visible** cell, read back from the context:
 
 ```
-last_bg = f_inv( context[-1, -1, 0] · (std_bg + 1e-8) + mean_bg )  # clamp to the physical range
+anchor = f_inv( context[p, s, 0] · (std_bg + 1e-8) + mean_bg )  # clamp to the physical range
 ```
 
-The forward asserts `last_bg ≥ BG_CLAMP_MIN − 1e-3` (a units tripwire that
-catches a z-scored value routed in by mistake) and forms the risk anchor `f(last_bg)`
-internally. No further filtering is applied to the context here.
+Indexing a masked cell yields a plausible anchor rather than an error, since its
+feat 0 is a legal-looking `z`. The forward asserts
+`anchor_bg ≥ BG_CLAMP_MIN − 1e-3` over all `M` slots (a units tripwire that
+catches a z-scored value routed in by mistake) and forms the risk anchor
+`f(anchor_bg)` internally. Padded slots must still carry a legal mg/dL value;
+their outputs are discarded by `valid`. No further filtering is applied to the
+context here.
 
 ---
 
 ## 8. Forward pass and output decode
 
 **Signature** (frozen):
-`forward(patches, attn_mask, last_bg, return_time=False) -> (q_tau, median)`.
+`forward(patches, attn_mask, anchor_bg, mask_idx, return_time=False) -> (q_tau, median)`.
 
-- `patches`: `(B, T, PATCH_DIM)`; `attn_mask`: `(T, T)` or `(B, T, T)` bool
-  (`True = attend`); `last_bg`: `(B,)` mg/dL.
-- `q_tau`: `(B, PREDICTION_PATCHES, PATCH_SIZE, 7)` in **risk space**, ascending τ.
-- `median`: `(B, PREDICTION_PATCHES, PATCH_SIZE)` in risk space (`== q_tau[..., 3]`).
+- `patches`: `(B, T, PATCH_DIM)`, `T ≤ MAX_SEQ_LEN` — a batch is left-padded to its
+  own longest window, so `T` varies and is never fixed at `MAX_SEQ_LEN`;
+  `attn_mask`: `(T, T)` or `(B, T, T)` bool (`True = attend`); `anchor_bg`:
+  `(B, M)` mg/dL (§7.4); `mask_idx`: `(B, M)` int64, the patch index each of the
+  `M` head slots reads.
+- `q_tau`: `(B, M, PATCH_SIZE, 7)` in **risk space**, ascending τ.
+- `median`: `(B, M, PATCH_SIZE)` in risk space (`== q_tau[..., 3]`).
 - `return_time=True` additionally returns the diagnostic hour-of-day probe
-  logits; they never affect `q_tau`/`median`, so ignore them for BG inference.
+  logits, one per slot; they never affect `q_tau`/`median`, so ignore them for BG
+  inference.
+
+A masked set smaller than `M` pads the surplus slots, which gather patch 0 and
+carry a legal anchor; a `(B, M)` `valid` bool marks them and the decode drops
+them, leaving `P` rows in `mask_idx` order — `P = PREDICTION_PATCHES` for the
+trailing forecast. `M = MAX_MASKED_PATCHES` (§3.1) is the largest masked set the
+objective admits.
 
 `QUANTILE_LEVELS = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)`, median column
 index `3`.
 
-### 8.1 `assemble_quantiles(head_raw, last_bg, carry_spread=0.0)`
+### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, carry_spread=0.0)`
 
-`head_raw` is `(B, P, S, 7)`: column 0 = median delta; columns 1..3 = the τ>.5
+`head_raw` is `(B, M, S, 7)`: column 0 = median delta; columns 1..3 = the τ>.5
 spreads (nearest→far, .75/.9/.95); columns 4..6 = the τ<.5 spreads
 (nearest→far, .25/.1/.05).
 
-```
-anchor = f( clamp(last_bg, BG_CLAMP_MIN, BG_CLAMP_MAX) ) # (B,), risk; broadcast over (P, S)
-delta  = head_raw[..., 0]                                # (B, P, S)
+`mask_idx` groups the `M` slots into contiguous **spans**, and the median runs per
+span: nothing accumulates or low-passes across the visible patches between two
+spans.
 
-# --- median (mode = 'global', the released default) ---
-delta_flat = delta.reshape(B, P*S)          # C-contiguous, PATCH-MAJOR: flat = p*S + s
-Bg         = global_median_basis(n=P*S, G=6, kind='dct') # (P*S, 6) orthonormal columns
-m          = anchor + (delta_flat @ Bg @ Bgᵀ).reshape(B, P, S)   # low-freq DCT projection
+```
+anchor = f( clamp(anchor_bg, BG_CLAMP_MIN, BG_CLAMP_MAX) )  # (B, M), risk; flat over S
+delta  = head_raw[..., 0]                                   # (B, M, S)
+
+# --- median (mode = 'global', the released default), per span of L patches ---
+delta_flat = delta[span].reshape(B, L*S)    # C-contiguous, PATCH-MAJOR: flat = p*S + s
+Bg         = global_median_basis(n=L*S, G=G_L, kind='dct')  # (L*S, G_L) orthonormal cols
+m          = anchor + (delta_flat @ Bg @ Bgᵀ).reshape(B, L, S)   # low-freq DCT projection
 
 # --- spreads (identical under every median mode) ---
 spread = softplus(head_raw[..., 1:]) + 1e-3              # strict positive floor
@@ -458,29 +542,31 @@ d_up   = spread[..., :3]                                 # .75/.9/.95
 d_dn   = spread[..., 3:]                                 # .25/.1/.05
 up = m[..., None] + carry_spread + cumsum(d_up, dim=-1)  # ascending
 dn = m[..., None] − carry_spread − cumsum(d_dn, dim=-1)  # descending in value
-q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, P, S, 7) ascending τ
+q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) ascending τ
 ```
 
-The median is a projection of the raw per-patch deltas onto a 6-dimensional
-low-frequency DCT subspace over the full horizon, so it is smooth and cannot
-drift or oscillate; at initialization (`delta ≈ 0`) it is `≈ anchor` — a flat
-persistence forecast. The `cumsum` of strictly-positive spreads guarantees a
-monotone ascending fan around the median. `carry_spread` defaults to `0` (only
-rolling inflation uses a non-zero value, §9).
+The median is a projection of the raw per-patch deltas onto a `G_L`-dimensional
+low-frequency DCT subspace over the span, so it is smooth and cannot drift or
+oscillate; at initialization (`delta ≈ 0`) it is `≈ anchor` — a flat persistence
+forecast. A fixed `G` in place of `G_L` is the identity at `L = 1` and stops
+contracting. The `cumsum` of
+strictly-positive spreads guarantees a monotone ascending fan around the median.
+`carry_spread` defaults to `0` (only rolling inflation uses a non-zero value, §9).
 
-### 8.2 The global-median DCT basis
+### 8.2 The per-span median DCT basis
 
-`global_median_basis(n, G, 'dct')` builds DCT-II cosine modes over the full
-horizon and L2-orthonormalizes the columns:
+`global_median_basis(n, G, 'dct')` builds DCT-II cosine modes over a span of
+`n = L · PATCH_SIZE` steps and L2-orthonormalizes the columns:
 
 ```
 B[s, j] = cos( π (s + 0.5) j / n )     for s in [0, n), j in [0, G)
 then normalize each column to unit L2 norm.
 ```
 
-This basis is **not** saved in the checkpoint — recompute it. (The per-patch
-`step_basis`, of shape `(PATCH_SIZE, K) = (6, 3)`, **is** saved; read it from the
-state dict or recompute the same way over `n = 6`.)
+`G` is `min(G_L, n)`, the span-scaled dimension of [§3.1](#31-recovering-dimensions).
+This basis is **not** saved in the checkpoint — recompute it, once per span
+length. (The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 3)`, **is**
+saved; read it from the state dict or recompute the same way over `n = 6`.)
 
 ### 8.3 Decoding to mg/dL
 
@@ -496,16 +582,17 @@ clamped into `[BG_CLAMP_MIN, BG_CLAMP_MAX]` by `f_inv`.
 
 ### 8.4 Conformal recalibration
 
-A band correction `delta` is per-`(step, τ)`, shape `(P·S, 7)`, in mg/dL, applied
-downstream of `f_inv`. It may be carried by the checkpoint
-(`ckpt['conformal_delta']`) or fitted by the consumer; either way the same two
-halves govern it.
+A band correction `delta` is additive mg/dL per `(step, τ)`, applied downstream of
+`f_inv`. It may be carried by the checkpoint (`ckpt['conformal_delta']`) or fitted
+by the consumer; either way the same rules govern it.
 
-**The apply.** `apply_quantile_conformal(bands, delta, median_idx=3)` adds
-`delta` and re-enforces three invariants — the **median is held fixed**
-(`delta[..., 3] = 0`), the **fan stays monotone** (no crossing), and an
-**all-zero delta is the identity**. The point forecast is untouched. Skipping the
-apply is bit-identical to the raw bands.
+**The apply.** `apply_quantile_conformal(bands, delta, median_idx=3)` takes one
+**two-dimensional** delta, shaped like the fan's own trailing `(step, τ)` axes —
+`(P·S, 7)` over a flattened horizon — adds it, and re-enforces three invariants:
+the **median is held fixed** (`delta[..., 3] = 0`), the **fan stays monotone** (no
+crossing), and an **all-zero delta is the identity**. The point forecast is
+untouched. Skipping the apply is bit-identical to the raw bands. A delta of any
+other rank is rejected, never broadcast.
 
 **The fit.** Split conformal on a held-out calibration set of matured
 `(forecast, realized)` pairs. Per `(step, τ)` the residuals are
@@ -527,6 +614,29 @@ level resolves without clamping (**19** for the seven levels of
 maximum of the residual sample, and the coverage they claim is arithmetic that
 never ran.
 
+**The region bins.** A fit is either **marginal** — one delta over the whole
+calibration set — or **region-binned** (Mondrian): the same fit run once per bin
+on that bin's own rows, stacked to `(n_bins, P·S, 7)`. The region is a property of
+the whole window, read off where its forecast is heading: the mean of the median
+line over the final patch of the horizon. An apply holds the median fixed, so a
+window's region is the same before and after correction and no second pass is
+needed. The one edge is at 110 mg/dL, inside the euglycaemic band; an edge at a
+clinical threshold splits the windows that decide an alarm across two separately
+fitted corrections. A bin holding fewer than **39** calibration windows — the `n`
+below which its own τ.05 offset is the calibration-sample minimum — takes the
+marginal delta instead. A stack travels with a meta carrying `layout`,
+`region_edges`, `region_variable` and the per-bin fallback record; without them a
+consumer cannot reconstruct the bin.
+
+**Applying a stack.** Group the windows by bin and call the apply once per group
+with that bin's `(P·S, 7)` slice. A per-window delta is never gathered.
+
+**One protocol per delta.** A delta is fit and applied within one masked-set
+protocol. A forecast fit is the one that ships; an infill fit is stored apart
+under `shipped = false` and never merged into a shipped band — its slots are
+bracketed by visible evidence on both sides, so its residuals are not
+exchangeable with a forecast's.
+
 Validity rests on **exchangeability** between the calibration set and the
 forecasts the delta is later applied to. Two consequences follow and are not
 optional: the split is **chronological** (older fitted on, newer held out and
@@ -536,12 +646,14 @@ covers perfectly and forecasts nothing.
 
 **Where each fit lives.** A checkpoint-carried delta is fit on the **simulator**
 distribution; for real-world CGM it must be re-fit per cohort or omitted, and the
-export path ships none. `T1DMAI/conformal.py` fits the off-device object;
-`T1DMDROID` fits a per-patient one on device from the patient's own matured
-forecasts and applies it to **display only** — the raw fan is what the alarm
-engine, the dose calculator, the accuracy suite, the `prediction` table and the
-wire all carry. Both implementations are bound by the rule above, and because
-both publish τ.05–.95 coverage under one name, neither may change it alone.
+export path ships none. Off device, `T1DMAI/conformal.py` fits and applies one
+delta and `T1DMAI/mondrian.py` bins it into a stack. On device, `T1DMDROID` fits a
+**marginal** per-patient delta from the patient's own matured forecasts — one
+`(step, τ)` correction, no region axis — and applies it to **display only**: the
+raw fan is what the alarm engine, the dose calculator, the accuracy suite, the
+`prediction` table and the wire all carry. Both implementations are bound by the
+order-statistic rule above, and because both publish τ.05–.95 coverage under one
+name, neither may change it alone.
 
 **Corrective versus constitutive.** The delta above *corrects* a fan the model
 already emitted, which is why it is display-only. The same fit and apply also give
@@ -565,25 +677,31 @@ median.
 **Single window** (≤ `PREDICTION_HORIZON_HOURS`, default 2 h):
 
 1. Gather the trailing raw history: BG (mg/dL), carb (g/step), insulin (U/step,
-   basal + bolus summed), length `n_ctx · 6`, `n_ctx ∈ [16, 48]`.
-2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb/insulin at 0 (no filtering — `normalize`
-   floors the sparse channels through `log1p`).
-3. `normalize` each channel → `context (n_ctx, 6, 3)`.
-4. Build `patches (T, 18)`: context reshaped step-major, then `P` prediction
-   patches with BG = 0 and carb/insulin = `normalize(0)` **or** announced doses.
-5. `attn_mask = create_attention_mask(n_ctx, P)` (§4).
-6. `last_bg = f_inv(denormalize(context[-1, -1, 0]))`, clamp to the physical range.
-7. `q_tau, median = model(patches[None], attn_mask, last_bg[None])`.
-8. `median_bg = f_inv(median)` (mg/dL); `bands = f_inv(q_tau)`; optionally
-   conformal-recalibrate `bands`.
+   basal + bolus summed), exercise (carb-equivalent g/step), length `n_ctx · 6`,
+   `n_ctx ∈ [16, 48]`.
+2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
+   0 (no filtering — `normalize` floors the sparse channels through `log1p`).
+3. `normalize` each channel → `context (n_ctx, 6, 5)`, feat 4 written in step 4.
+4. Choose the masked set — the default is the trailing `P` patches, a forecast.
+   Build `patches (T, 30)`: context reshaped step-major, then `P` future patches
+   with BG = 0 and carb/insulin/exercise at `normalize(0)` **or** announced. On
+   every masked patch zero feat 0 and set feat 4 (§7.3).
+5. Build `attn_mask` from the visible/masked labelling (§4).
+6. `anchor_bg`: one mg/dL anchor per masked patch (§7.4); `mask_idx`: their patch
+   indices; pad both to `M` slots.
+7. `q_tau, median = model(patches[None], attn_mask, anchor_bg[None], mask_idx[None])`.
+8. Drop the padded slots, then `median_bg = f_inv(median)` (mg/dL);
+   `bands = f_inv(q_tau)`; optionally conformal-recalibrate `bands` — the delta is
+   fit against the forecast masked set and means nothing under another (§8.4).
 
 **Autoregressive rolling** (horizons beyond one window): repeat the window; each
 roll —
 
 1. Run steps 4–8 → a risk-space `median`.
 2. Re-feed: `median → f_inv → mg/dL → normalize → BG feat-0 slot` of the new
-   context patches. Carb/insulin come from the caller's announced schedule for
-   that roll, else the `normalize(0)` no-dose baseline.
+   context patches, clearing feat 4 — those patches are visible now. Carb,
+   insulin and exercise come from the caller's announced schedule for that roll,
+   else the `normalize(0)` no-event baseline.
 3. Slide the context forward, dropping the oldest patches once it exceeds
    `MAX_CONTEXT_PATCHES`. BG anchors at the last forecast BG carried across rolls.
 4. To keep the band fan from resetting at each roll seam, carry the accumulated
@@ -592,7 +710,8 @@ roll —
    median is untouched; only the bands widen as uncertainty accumulates.
 
 The shipped `inference.predict` and `inference.predict_rolling` implement both
-recipes; `predict_what_if` is `predict` with `overrides`.
+recipes; `predict_what_if` is `predict` with `overrides`. `predict` takes the
+masked set as `mask_spans` and defaults it to the trailing forecast.
 
 ---
 
@@ -604,7 +723,7 @@ Using the shipped helpers (the simplest path — no reimplementation):
 import numpy as np, torch
 from model import T1DMAI
 from inference import predict
-from normalization import normalize
+from normalization import normalize, CHANNEL_NAMES
 from config import MIN_CONTEXT_PATCHES, PATCH_SIZE, N_INPUT_FEATURES
 
 # 1. Load a checkpoint and its embedded stats.
@@ -617,26 +736,32 @@ model.load_state_dict(merged, strict=False)
 model.eval()
 
 # 2. Build a normalized context from a raw history.
-#    Here: n_ctx patches of BG (mg/dL), carb (g/step), insulin (U/step).
+#    Here: n_ctx patches of BG (mg/dL), carb (g/step), insulin (U/step),
+#    exercise (carb-equivalent g/step).
 n_ctx = MIN_CONTEXT_PATCHES
-raw   = np.zeros((n_ctx * PATCH_SIZE, N_INPUT_FEATURES), dtype=np.float32)
+n_ch  = len(CHANNEL_NAMES)                          # 4 normalized channels
+raw   = np.zeros((n_ctx * PATCH_SIZE, n_ch), dtype=np.float32)
 raw[:, 0] = 120.0        # BG mg/dL   (raw; clamp a real stream to the physical range)
 raw[:, 1] = 0.0          # carb g/step
 raw[:, 2] = 0.02         # insulin U/step (basal)
-ctx_norm = normalize(raw, stats)                    # (n_ctx*6, 3) normalized
-context  = torch.from_numpy(ctx_norm.reshape(n_ctx, PATCH_SIZE, N_INPUT_FEATURES))
+raw[:, 3] = 0.0          # exercise carb-equivalent g/step
+ctx_norm = normalize(raw, stats)                    # (n_ctx*6, 4) normalized
+context  = torch.zeros(n_ctx, PATCH_SIZE, N_INPUT_FEATURES)
+context[..., :n_ch] = torch.from_numpy(
+    ctx_norm.reshape(n_ctx, PATCH_SIZE, n_ch))      # feat 4 stays 0: predict() writes it
 
-# 3. Forecast. predict() handles the mask, the last_bg anchor, and f_inv.
+# 3. Forecast. predict() handles the mask, the per-slot anchors, and f_inv.
 with torch.no_grad():
     out = predict(model, context, normalization_stats=stats)
 
-median_bg = out["median_bg"]    # (PREDICTION_PATCHES*PATCH_SIZE,) mg/dL headline
-bands     = out["bands"]        # (PREDICTION_PATCHES, PATCH_SIZE, 7) mg/dL fan
+median_bg = out["median_bg"]    # (P*PATCH_SIZE,) mg/dL headline, P masked patches
+bands     = out["bands"]        # (P, PATCH_SIZE, 7) mg/dL fan
 ```
 
-To announce future doses, pass
-`overrides={0: carb_norm, 1: insulin_norm}` (each `(PREDICTION_PATCHES,
-PATCH_SIZE)` **normalized**) to `predict`. For horizons past 2 h use
+To announce future doses and sessions, pass
+`overrides={0: carb_norm, 1: insulin_norm, 2: exercise_norm}` (each
+`(PREDICTION_PATCHES, PATCH_SIZE)` **normalized**) to `predict`. For a backcast or
+an infill pass `mask_spans=[(start_patch, length), ...]`. For horizons past 2 h use
 `inference.predict_rolling(...)`.
 
 ---
@@ -647,31 +772,32 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 
 | constant | value |
 |---|---|
-| Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); the current `risk-v3` release ships `2.2211457449985317 / 1.084 / 5.540076976170212` |
-| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `40.0 / 400.0` under `risk-v3` |
-| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−√10, +√10]` under `risk-v3` |
+| Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v4` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
+| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v4` |
+| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v4` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
-| `N_INPUT_FEATURES` / `PATCH_DIM` | `3` / `18` |
-| feature order | `[bg_absolute, carb, insulin]` |
-| `CHANNEL_TO_FEAT` | `{0: 1, 1: 2}` |
-| patch flatten | step-major: `flat = t·3 + feat` |
+| `N_INPUT_FEATURES` / `PATCH_DIM` | `5` / `30` |
+| feature order | `[bg_absolute, carb, insulin, exercise, bg_masked]` |
+| `CHANNEL_TO_FEAT` | `{0: 1, 1: 2, 2: 3}` |
+| patch flatten | step-major: `flat = t·5 + feat` |
 | `PREDICTION_PATCHES` / output steps | `4` / `24` (2 h) at the default horizon |
 | `MIN / MAX_CONTEXT_PATCHES` | `16 / 48` (8–24 h) |
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
 | `N_SPREADS` / `N_QUANTILES` | `3` / `7` |
 | `BG_QUANTILE_SPREAD_MIN` | `1e-3` |
 | `BG_HEAD_STEP_BASIS_DIM` (K) / type | `3` / `'dct'` |
-| `BG_HEAD_MEDIAN_MODE` / `GLOBAL_DIM` | `'global'` / `6` |
+| `BG_HEAD_MEDIAN_MODE` / `GLOBAL_DIM` | `'global'` / `6` at a span of `PREDICTION_PATCHES`; per span `G_L` (§3.1) |
+| `MAX_MASKED_PATCHES` (M) | **checkpoint-carried** (§3.1); surplus slots are padded and discarded |
 | `ROPE_BASE` | `1000` |
 | RMSNorm `eps` | `1e-6` |
 | normalize `std` floor | `1e-8` |
-| input filter | none in the reference (raw signal; BG clamped to the descriptor's physical range, carb/insulin floored at 0); a consumer's own filter must be strictly causal (§7.1) |
-| ALiBi slope | `−|i−j| · |slope_h|`, `slope_h = |stored|` (init `2^(−8(h+1)/N_HEADS)`) |
+| input filter | none in the reference (raw signal; BG clamped to the descriptor's physical range, carb/insulin/exercise floored at 0); a consumer's own filter must be strictly causal (§7.1) |
+| position encoding | RoPE only; no additive distance bias |
 | SDPA scaling | `1/sqrt(HEAD_DIM)` |
 
 The per-channel `mean` / `std` come from `ckpt['normalization_stats']` (BG in
-risk space, carb/insulin in log1p space).
+risk space, carb/insulin/exercise in log1p space).
 
 ---
 
@@ -680,19 +806,20 @@ risk space, carb/insulin in log1p space).
 - **The graph is plain fp32 PyTorch** — `model.eval()` + `torch.no_grad()`, no
   autocast anywhere. Once the dimensions are fixed the graph is static and
   **traceable / ONNX-exportable**.
-- The only non-elementwise/matmul op is `F.scaled_dot_product_attention` with an
-  additive float mask. Export with a math-fallback SDPA, or hand-roll
-  `softmax(QKᵀ/sqrt(HEAD_DIM) + mask) @ V`. RoPE, RMSNorm, SwiGLU, and ALiBi are
-  all elementwise or matmul.
+- The only non-elementwise/matmul op is `F.scaled_dot_product_attention` with a
+  bool mask. Export with a math-fallback SDPA, or hand-roll
+  `softmax(QKᵀ/sqrt(HEAD_DIM) + mask) @ V` with `-inf` at the blocked positions.
+  RoPE, RMSNorm and SwiGLU are all elementwise or matmul.
 - **What a non-PyTorch runtime reimplements outside the exported graph** (all
   pure numeric): per-channel `normalize` / `denormalize`; `kovatchev_f` /
-  `kovatchev_f_inv` with their clamp guards; the `last_bg` anchor; the
-  step-major patch flatten; the prediction-zone `normalize(0)` fill;
-  `assemble_quantiles` (softplus, cumsum, DCT projection); and the optional
-  conformal apply.
-- **Watch the ALiBi sign.** The stored slopes are trained and can be negative;
-  the forward takes `.abs()`. Using the raw sign silently inverts the temporal
-  bias — this is the single easiest porting mistake.
+  `kovatchev_f_inv` with their clamp guards; the per-slot anchor; the step-major
+  patch flatten; the masked-patch fill (feat 0 zeroed, feat 4 set, the maskable
+  feats at `normalize(0)` or the announced plan); the bool attention mask;
+  `assemble_quantiles` (softplus, cumsum, per-span DCT projection); and the
+  optional conformal apply.
+- **Watch the `bg_masked` bit.** Nothing else writes feat 4, so a builder that
+  forgets it announces every masked patch as an observation, with every shape
+  still matching and every fan still monotone.
 - **Keep the decode constants exact.** `ROPE_BASE`, the median mode/basis, and
   the quantile floor are not stored in the checkpoint; a released model is locked
   to the values in §11.

@@ -44,9 +44,9 @@ EOF
 cat >"$PATDIR/inference" <<'EOF'
 Every tensor lives in exactly one of three spaces
 Patch flatten order is step-major
-The stored slopes are trained and may be
-decodes to a phantom
-builds DCT-II cosine modes over the full
+Position enters through RoPE alone
+the masked set is announced, never inferred
+builds DCT-II cosine modes over a span of
 EOF
 cat >"$PATDIR/invariants" <<'EOF'
 on one side and an **amount** on the other
