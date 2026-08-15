@@ -41,7 +41,7 @@ left-preferring anchor in place of one broadcast `last_bg`.
 `../SPEC/inference.md` holds the feature map, the patch geometry, the forward
 signature and the head's slot layout.
 
-**The configured capacity is medium** — `D_MODEL` 128, `N_LAYERS` 8, `N_HEADS` 8,
+**The configured capacity is nano** — `D_MODEL` 32, `N_LAYERS` 2, `N_HEADS` 2,
 set through `resize_model.py`.
 
 The clinical LBGI/HBGI indices in `T1DMSIM` deliberately stay on the published
