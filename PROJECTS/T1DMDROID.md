@@ -79,12 +79,12 @@ carries a `conformal_delta`, so the fan the phone draws is the raw fan until the
 user asks for a fit from the Models drill-down. That fit is
 `../SPEC/inference.md` §8.4's, run in the Rust core over the patient's own
 matured `(forecast, realized)` windows at the model's own horizon, stored per
-model id, and reaching the BG panel's two **display** fans and nothing else: the
-forecast overlay, and the hindsight sweep beside it. Both, or the sweep would
-state a second and narrower uncertainty on the same axes. The sweep applies it
-in-sample to the rows the delta was fitted on, which §8.4's exchangeability
-argument does not cover — accepted, because nothing the sweep draws is read by
-anything. Every classifier — the alarm engine, the calculator rails, the accuracy
+model id, and reaching three **display** fans and nothing else: the BG panel's
+forecast overlay, the hindsight sweep beside it, and the exercise review's swept
+fan. All three, or a raw fan would state a second and narrower uncertainty beside
+a calibrated one. The two sweeps apply it in-sample to the rows the delta was
+fitted on, which §8.4's exchangeability argument does not cover — accepted,
+because nothing either sweep draws is read by anything. Every classifier — the alarm engine, the calculator rails, the accuracy
 suite — reads the raw fan, the wire carries the raw fan, and the median never
 moves. A stored
 correction lapses one fitting window after it was made, and the artifact it was
