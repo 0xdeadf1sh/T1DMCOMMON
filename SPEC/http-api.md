@@ -96,8 +96,9 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   surfaced, on the records that carry them — [Photo](#photo-metadata) and
   [Alert](#alert). A meal, dose, basal slot, or prediction carries neither.
 - **Storage units are fixed:** blood glucose in mg/dL; heart rate in bpm, steps
-  as a count, and mood as a small integer; `sleep` and `exercise` are stored as
-  plain scalar magnitudes. The mg/dL ↔ mmol/L toggle is display-only and never
+  as a count, and mood as a small integer; `sleep` is stored as a plain scalar
+  magnitude, and `exercise` as grams of carbohydrate equivalent per bucket
+  (`invariants.md` §3, §5). The mg/dL ↔ mmol/L toggle is display-only and never
   affects the wire format.
 - **Meals and doses are curves, not sample columns.** A meal's carbohydrate
   appearance curve and a dose's insulin action curve travel as self-describing

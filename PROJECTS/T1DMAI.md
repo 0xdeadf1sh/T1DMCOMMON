@@ -29,9 +29,9 @@ bias on the logits and no `alibi_slopes` tensor. QK-norm on Q and K stays.
 curve in g/step, encoded log1p + z like carbohydrate, never risk-transformed and
 never rescaled. The real cohorts keep a zero exercise column by decision: neither
 Ohio's self-reported intensity nor AZT1D's device mode is wired to it. The wire's
-`exercise` is a plain scalar magnitude and does not feed the channel, so
-`../SPEC/invariants.md` §3 carries no exercise row and gains one only when
-something does.
+`exercise` carries the same quantity, in grams of carbohydrate equivalent per
+bucket — `T1DMDROID` writes it from the patient's logged sessions against their
+own `carb_equiv_per_min`. Units and curve in `../SPEC/invariants.md` §3 and §5.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else

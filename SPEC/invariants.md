@@ -75,6 +75,7 @@ written back.
 | Basal slot dose | units **delivered in that slot** | Not a rate. Summing slots yields a daily total. |
 | Glycaemic index | 0–100 | A GI, not a 0–1 fraction. |
 | Heart rate | bpm | |
+| Exercise | grams of carbohydrate equivalent | Glucose disposal, expressed as the carbohydrate it offsets. Never a duration, an intensity, or an energy. Positive-valued; the sign lives in the equation that subtracts it. See §5. |
 | Duration | minutes | Everywhere `duration_min` appears. |
 | Rate constants | per hour | `ka_per_hour`, `ke_per_hour`. |
 | Timestamps | epoch milliseconds, UTC | |
@@ -213,6 +214,10 @@ What the rate *is* differs by channel, and the distinction is load-bearing:
   running twenty-four hours or more. A rapid bolus takes one of two shapes, and
   which one must be stated alongside it. It is *not* the injection instant, and
   *not* a delivery schedule.
+- **Exercise — glucose disposal rate.** Grams of carbohydrate equivalent removed
+  from the blood per bucket: a gamma curve spread across the session and the
+  ninety minutes after it. It is *not* the session's duration, its intensity, or
+  its energy cost.
 
 A rapid bolus is drawn from one of two curve families:
 
@@ -238,6 +243,26 @@ dur = clamp(k · θ · 4, 120, 360)       # minutes
 
 `GI 100 → (2.0, 15.0, 120 min)`; `GI 50 → (3.25, 22.5, 292.5 min)`. The duration
 clamp binds below about GI 31.
+
+The exercise gamma is defined here for the same reason:
+
+```
+magnitude = duration_min · carb_equiv_per_min      # grams
+k         = 3.0
+θ         = 15.0
+dur       = duration_min + 90                      # minutes
+```
+
+`carb_equiv_per_min` is per-patient. `T1DMSIM` uses a population constant of
+`0.5`; `T1DMDROID` takes the patient's own value and defaults to the same `0.5`.
+Magnitude scales with duration alone — every model pretrained on `T1DMSIM` learnt
+it that way, so deriving it from pace, heart rate or energy puts the channel
+off-distribution.
+
+The post-exercise insulin-sensitivity boost is a **separate mechanism** and is
+never carried by this curve: `T1DMSIM` raises sensitivity for six hours after the
+session by `0.10 · duration_min / 75`, capped at `0.30`. A consumer that folds
+that tail into the exercise channel counts it twice.
 
 Basal is auto-extended across the whole context and forecast window rather than
 treated as a discrete event, because background insulin is always present. Its
