@@ -153,20 +153,20 @@ globals (from the checkpoint) and instantiate.
 | `MIN/MAX_CONTEXT_PATCHES` | 168 / 336 | `min/max_context_patches` | — |
 | `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
 | `BG_HEAD_HIDDEN` | head MLP width | — | `bg_head.0.weight` rows |
-| `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 3 | — | `step_basis` cols |
+| `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 6 | — | `step_basis` cols |
 | `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= K·(1+2·N_SPREADS)` |
 
 A few decode-critical constants are **not** stored anywhere and are fixed
 released defaults — you must reproduce them exactly: `ROPE_BASE = 1000`, RMSNorm
 `eps = 1e-6`, `QUANTILE_LEVELS = (.05, .1, .25, .5, .75, .9, .95)`,
 `BG_QUANTILE_SPREAD_MIN = 1e-3`, `BG_HEAD_MEDIAN_MODE = 'global'`,
-`BG_HEAD_MEDIAN_GLOBAL_DIM = 6`, `BG_HEAD_STEP_BASIS_TYPE = 'dct'`, and the
+`BG_HEAD_MEDIAN_GLOBAL_DIM = 12`, `BG_HEAD_STEP_BASIS_TYPE = 'dct'`, and the
 Kovatchev constants (§5).
 
 `BG_HEAD_MEDIAN_GLOBAL_DIM` is the median-basis dimension at a span of
 `PREDICTION_PATCHES` patches. Each span of `L` patches uses
 `G_L = max(1, ceil(BG_HEAD_MEDIAN_GLOBAL_DIM · L / PREDICTION_PATCHES))` columns —
-`2 / 3 / 5 / 6` at `L = 1 / 2 / 3 / 4`.
+`3 / 6 / 9 / 12` at `L = 1 / 2 / 3 / 4`.
 
 `MAX_MASKED_PATCHES` (`M`) is the head's slot count and the training sampler's cap
 on the masked set. It sizes no weight — the BG head is applied per slot with shared
@@ -565,7 +565,7 @@ then normalize each column to unit L2 norm.
 
 `G` is `min(G_L, n)`, the span-scaled dimension of [§3.1](#31-recovering-dimensions).
 This basis is **not** saved in the checkpoint — recompute it, once per span
-length. (The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 3)`, **is**
+length. (The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 6)`, **is**
 saved; read it from the state dict or recompute the same way over `n = 6`.)
 
 ### 8.3 Decoding to mg/dL
@@ -786,8 +786,8 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
 | `N_SPREADS` / `N_QUANTILES` | `3` / `7` |
 | `BG_QUANTILE_SPREAD_MIN` | `1e-3` |
-| `BG_HEAD_STEP_BASIS_DIM` (K) / type | `3` / `'dct'` |
-| `BG_HEAD_MEDIAN_MODE` / `GLOBAL_DIM` | `'global'` / `6` at a span of `PREDICTION_PATCHES`; per span `G_L` (§3.1) |
+| `BG_HEAD_STEP_BASIS_DIM` (K) / type | `6` / `'dct'` |
+| `BG_HEAD_MEDIAN_MODE` / `GLOBAL_DIM` | `'global'` / `12` at a span of `PREDICTION_PATCHES`; per span `G_L` (§3.1) |
 | `MAX_MASKED_PATCHES` (M) | **checkpoint-carried** (§3.1); surplus slots are padded and discarded |
 | `ROPE_BASE` | `1000` |
 | RMSNorm `eps` | `1e-6` |
