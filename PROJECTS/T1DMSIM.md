@@ -9,26 +9,6 @@ blood glucose emerges from their interaction. Python. MIT.
 Passive tooling. It produces the corpus `T1DMAI` pretrains on, and it also builds
 the blosc2 cache and emits the normalization statistics that pipeline consumes.
 
-## Published datasets are immutable
-
-`cache_balanced/DATASET.md` and `cache_hypo/DATASET.md` **must not be edited or
-regenerated.** They describe the *pregenerated, published* datasets people
-actually download, not any current run.
-
-The corollary the author stated explicitly: the site's corpus and distribution
-figures must be sourced from `cache_balanced`, not from a freshly regenerated
-benchmark. Quoting numbers from a new run would describe a corpus nobody has.
-
-Simulator-*validation* numbers — distances to the real cohorts, gap score, speed
-benchmarks — have no cache counterpart and legitimately track the regenerated
-reports. So when report numbers change, update the comparison directories, the
-paper, and the site's validation figures, but leave both cache reports and the
-site's corpus figures alone.
-
-Known and accepted: `cache_*/meta.json` records a baseline snapshot, so
-regenerating that baseline makes the cache reports' delta column compare against
-a superseded reference. That drift is accepted, not fixed.
-
 ## Committed report artefacts did not reproduce
 
 A genuine trap, diagnosed and resolved. Committed comparison artefacts failed to
@@ -51,20 +31,19 @@ Speed figures are machine-dependent, and a ratio can improve because the
 
 ## The known realism weakness
 
-The simulator matches the real cohorts across the aggregate gap-score metrics,
-within the envelope spanned by the three cohorts, with one clear exception:
-**high-frequency variability**. Step-to-step glucose variation is roughly 7–9%
-low at five-minute cadence, and worse on a common fifteen-minute grid.
+Two gap-score metrics sit outside the envelope the three cohorts span: hypo
+episodes per day (z = +1.46, 1.18/day against 0.64–1.02) and TBR1 (z = +1.06).
+The simulator runs mild lows more often than any real cohort. The other
+eighteen metrics are inside it.
 
-This is the clearest remaining weakness and an ongoing tuning target — likely the
-equilibrium of the stochastic glucose-effectiveness term or the sensor-noise
-model under-producing jitter. It had previously been masked by a regrid bug that
-interpolated linearly where it should have taken the nearest sample.
+High-frequency variability is no longer the exception. On the cadence-fair
+fifteen-minute grid Δ-BG SD is 12.14 against 10.65–14.55 across the cohorts
+(z = −0.47); at raw five-minute cadence it is still about 10% low, 5.38
+against Ohio 5.89 and AZT1D 6.02.
 
-The simulator is also anchored on one cohort: its distance to that cohort sits
-below the floor that the real cohorts show against *each other*, which is a
-tuning signature. Realism claims should lean on the other two cohorts, whose
-distances sit at a comparable level.
+The simulator sits closer to two cohorts than those cohorts sit to each other:
+W₁ 5.9 to Ohio and 5.3 to Shanghai, against a real-vs-real floor of 10.1. That
+is a tuning signature. Realism claims should lean on AZT1D, at 22.8.
 
 An audit of the comparison tooling fixed fifteen defects in the testing code —
 entropy measures inflated across gaps, a subject silently dropped, NaN-inflated
