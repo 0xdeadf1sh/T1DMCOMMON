@@ -102,7 +102,7 @@ A training-produced checkpoint contains:
 | `conformal_delta`, `conformal_meta` | optional band recalibration (§8.4) | optional |
 | `master_seed`, `loss_history`, `val_history`, `loss_ema`, `best_val_*` | telemetry | no |
 
-Some checkpoints (e.g. a fine-tuned one) carry a leaner set and may **omit
+Some checkpoints carry a leaner set and may **omit
 `training_config`**; in that case recover the architecture dimensions from the
 state-dict tensor shapes ([§3.1](#31-recovering-dimensions)).
 
@@ -150,7 +150,7 @@ globals (from the checkpoint) and instantiate.
 | `N_INPUT_FEATURES` | 5 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
 | `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 30 | derive | `patch_embed.weight` cols |
 | `PREDICTION_PATCHES` | horizon patches | `prediction_patches` | — |
-| `MIN/MAX_CONTEXT_PATCHES` | 48 / 96 | `min/max_context_patches` | — |
+| `MIN/MAX_CONTEXT_PATCHES` | 168 / 336 | `min/max_context_patches` | — |
 | `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
 | `BG_HEAD_HIDDEN` | head MLP width | — | `bg_head.0.weight` rows |
 | `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 3 | — | `step_basis` cols |
@@ -284,7 +284,7 @@ what makes the anchor (§7.4), the median basis (§8.2) and the span grouping we
 defined. The masked patches are decoded **jointly** in one forward pass, with no
 causal triangulation among them, and future leak is prevented solely by the
 blocked visible→masked direction. The model accepts any `n_ctx` in
-`[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[48, 96]` patches (24–48 h).
+`[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[168, 336]` patches (84–168 h).
 
 `create_attention_mask(n_ctx, P)` remains as a shim for the right-edge forecast:
 it builds that visible bool internally and returns the `(T, T)` mask.
@@ -438,7 +438,7 @@ From a raw history:
 
 1. Take the trailing raw per-step series for BG (mg/dL), carb (g/step), insulin
    (U/step, basal + bolus summed) and exercise (carb-equivalent g/step), length
-   `n_ctx · PATCH_SIZE`, with `n_ctx ∈ [48, 96]`.
+   `n_ctx · PATCH_SIZE`, with `n_ctx ∈ [168, 336]`.
 2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
    0. Optionally pre-filter BG (§7.1); the reference applies no filter.
 3. `normalize` each channel (BG via risk-z, the other three via log1p-z).
@@ -678,7 +678,7 @@ median.
 
 1. Gather the trailing raw history: BG (mg/dL), carb (g/step), insulin (U/step,
    basal + bolus summed), exercise (carb-equivalent g/step), length `n_ctx · 6`,
-   `n_ctx ∈ [48, 96]`.
+   `n_ctx ∈ [168, 336]`.
 2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
    0 (no filtering — `normalize` floors the sparse channels through `log1p`).
 3. `normalize` each channel → `context (n_ctx, 6, 5)`, feat 4 written in step 4.
@@ -782,7 +782,7 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | `CHANNEL_TO_FEAT` | `{0: 1, 1: 2, 2: 3}` |
 | patch flatten | step-major: `flat = t·5 + feat` |
 | `PREDICTION_PATCHES` / output steps | `4` / `24` (2 h) at the default horizon |
-| `MIN / MAX_CONTEXT_PATCHES` | `48 / 96` (24–48 h) |
+| `MIN / MAX_CONTEXT_PATCHES` | `168 / 336` (84–168 h) |
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
 | `N_SPREADS` / `N_QUANTILES` | `3` / `7` |
 | `BG_QUANTILE_SPREAD_MIN` | `1e-3` |
