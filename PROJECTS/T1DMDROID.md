@@ -1,7 +1,9 @@
 # T1DMDROID — working knowledge
 
 The Android client: reads the CGM, runs forecasting on device, owns the
-patient's data, syncs to `T1DMSERVER`, and drives an optional BLE watch.
+patient's data, syncs to `T1DMSERVER`, and drives an optional BLE watch. It can
+also mirror a subset of that data outward to a third party — see *Outbound
+destinations*.
 
 Kotlin + Compose, multi-module Gradle, with a Rust core (`crates/t1dm-core`) over
 JNI. GPL-3.0. Sideload-only — never a store listing. Targets exactly one phone.
@@ -155,6 +157,42 @@ value does.
 
 CI enforces this: `rail-invariants.yml` is a blocking gate on the calculator
 invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
+
+## Outbound destinations
+
+Two, and only the first is a contract:
+
+- **`T1DMSERVER`** — the full record, both directions, `SPEC/http-api.md`.
+- **The Nightscout bridge** — off by default. One way, and only BG, carbohydrate
+  and bolus, to a host speaking the Nightscout `/api/v1` subset. Not a
+  specification: it binds nothing but `T1DMDROID`, and nothing about it belongs
+  in `SPEC/`.
+
+Both ride one durable outbox, distinguished by `OutboxKind`. The bridge's failures
+are its own: a host that is off, unreachable, or rejecting its credential backs off
+one row and must never stand the queue down, because that would let a third party
+stall the patient's own sync.
+
+Basal and exercise are withheld deliberately. Nightscout's basal is a **rate**
+where §3 makes ours an **amount**, and `exercise` is carbohydrate-equivalent
+disposal whose sign is opposite a meal's — either mapping misreports the record
+while looking plausible.
+
+A bridged BG entry keys on the five-minute grid, as everything does. A bridged
+**treatment does not**: it carries the event's unsnapped `updatedAt`. Snapping put
+a meal and the bolus taken with it on one instant, and the host keys treatments by
+timestamp — so the second was acked `200` and silently discarded, losing a logged
+meal. Do not "restore" the grid here; the grid still governs the phone's own record
+and everything on the wire to `T1DMSERVER`.
+
+The `/api/v1` write has no idempotency key, so a lost acknowledgement can duplicate
+an upload. The phone narrows that window by reading back before a retry; it does
+not close it. What comes back is not what was sent — the observed host rewrites
+`notes` and `enteredBy`, normalises `created_at` to UTC, materialises absent
+amounts as `0`, and ignores `find[…]` queries outright. Recognition tolerates all
+of that and is pinned by tests carrying verbatim response bodies. Treat any new
+assumption about what a host preserves as false until a real response says
+otherwise.
 
 ## Platform traps — HyperOS / MIUI
 
