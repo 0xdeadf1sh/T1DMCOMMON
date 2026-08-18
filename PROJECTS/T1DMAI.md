@@ -118,7 +118,7 @@ prior to that commit is unrecoverable.
   is ~1.9 GB and sits in the repository root; the README links it rather than
   committing it.
 - **Generated figures and reports are gitignored wholesale** — on the order of a
-  gigabyte of regenerable PNGs under `figures/`, `new_models/*/` and
+  gigabyte of regenerable PNGs under `figures/`, `models/*/` and
   `metrics/**/figures/`. The source scripts stay. The one exception is
   `screenshots/`, which is committed: `make_readme_figures.py` writes the six
   light/dark PNGs the README embeds, and those must survive a fresh clone or the
