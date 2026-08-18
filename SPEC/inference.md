@@ -175,9 +175,22 @@ is a training-time choice, not a released constant: read it from
 `training_config['max_masked_patches']` and run each checkpoint at its own. A
 checkpoint that omits `training_config` loses it, and no tensor shape recovers it.
 
-The exported descriptor carries no `max_masked_patches`. The exported graph is cut
-to the trailing `PREDICTION_PATCHES` forecast and never gathers by `mask_idx`, so a
-descriptor consumer has no slot count to match.
+The exported descriptor carries it as `geometry.MAX_MASKED_PATCHES`, and the
+exported graph is sized by it: the masked set crosses as a `(M, T)` one-hot
+`slot_sel` input, row `j` naming the patch head slot `j` reads, ascending. Surplus
+rows repeat patch 0 and their outputs are discarded. A selection matmul, not a
+gather — no int64 tensor crosses the runtime boundary.
+
+The graph emits `slot_hidden` `(B, M, D_MODEL)`, the final-normed hidden state per
+slot, and the export writes `bg_head`'s weights beside the artifact as the flat
+fp32 file `head.file` names. A consumer reproduces `head_raw` from the two, and may
+put an adapter between them; with no adapter the two paths agree, which is what a
+consumer checks at load. The `head` block carries the tensor order, the shapes and
+a sha256 over the exact bytes.
+
+`geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts (`T − PREDICTION_PATCHES`),
+which a shorter export lowers; `ARCH_MAX_CONTEXT_PATCHES` is the architecture's own
+ceiling.
 
 The per-patch `step_basis` buffer **is** saved in the state dict; the per-span
 median basis is **not** — recompute it (§8.2).
