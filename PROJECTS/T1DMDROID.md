@@ -64,9 +64,26 @@ the GPU, which is what makes fp16 tolerable there.
 The artifact is a **single fixed shape**; the graph is cut in risk space, with the
 anchor, inverse transform, and quantile assembly left to Rust. The exporter lives
 in `T1DMAI/exporters/`, and the **descriptor is the sole source** of pre/post
-constants — the app never parses a checkpoint pickle. See
-`../SPEC/invariants.md` §4 on why those constants must come from the descriptor
-rather than being hardcoded.
+constants — the app never parses a checkpoint pickle, and it parses the descriptor
+in the shape the exporter writes rather than projecting it onto a second schema.
+See `../SPEC/invariants.md` §4 on why those constants must come from the
+descriptor rather than being hardcoded.
+
+**The masked set is an input, not the trailing horizon.** It crosses as a one-hot
+selection matrix naming the patch each head slot reads, so forecast, backcast and
+infill are one artifact under different inputs. Nothing in the app holds a
+geometry of its own: the sequence length, the context bounds, the slot count and
+the span envelope all come from the descriptor, and the whole graph input is built
+in the Rust core.
+
+**The head is re-runnable, and that is the adapter seam.** The graph emits the
+trunk's hidden state per slot and the export ships the head's weights beside the
+artifact, so the app can reproduce `head_raw` outside the graph and put a low-rank
+adapter in front of it. The trunk stays frozen inside the `.pte`; a fit is a few
+thousand numbers trained from the patient's own matured windows. A head that does
+not reproduce the graph's own output is refused rather than used. Attaching or
+detaching an adapter drops that model's band correction and stored predictions —
+both described the forecaster that was there before.
 
 Agreement between the fp16 GPU path and the fp32 CPU path is measured and
 surfaced; safety decisions gate on it. A non-authoritative backend may render a
