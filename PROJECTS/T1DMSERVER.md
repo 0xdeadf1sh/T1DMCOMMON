@@ -53,6 +53,17 @@ Everything sits under `storage.data_dir` (default `./data`): the database, plus
 `models/`, `photos/`, and `backups/`. Note the models directory the binary
 actually uses is `<data_dir>/models`, not the repository-root `models/`.
 
+**One artifact, one sidecar — a model with a third file does not fit.**
+`refresh_models` registers every non-`.json` file in the directory as a model in
+its own right and pairs it with a sibling `<stem>.descriptor.json`. Since the
+export began writing a head side file beside each artifact — the seam an on-device
+adapter attaches to — a model delivered through the server arrives without it, and
+the phone offers no adapter for that model (it says so, rather than adapting
+against a head it does not have). Dropping the head file into the models directory
+would not fix it: the scan would register `<id>.head.bin` as a model of its own,
+with no descriptor, and offer it for download. Serving it needs a registry that
+knows a model can have companion files. An `adb`-pushed model is unaffected.
+
 The database grows by roughly a gigabyte per year and is not compacted. Backups
 are taken on demand from the Settings pane — there is no scheduler, despite
 `BackupConfig` existing in the configuration structs, where nothing reads it.
