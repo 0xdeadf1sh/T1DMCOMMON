@@ -559,11 +559,13 @@ q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) asce
 ```
 
 The median is a projection of the raw per-patch deltas onto a `G_L`-dimensional
-low-frequency DCT subspace over the span, so it is smooth and cannot drift or
-oscillate; at initialization (`delta ≈ 0`) it is `≈ anchor` — a flat persistence
-forecast. A fixed `G` in place of `G_L` is the identity at `L = 1` and stops
-contracting. The `cumsum` of
-strictly-positive spreads guarantees a monotone ascending fan around the median.
+low-frequency DCT subspace over the span, so it cannot drift; at initialization
+(`delta ≈ 0`) it is `≈ anchor` — a flat persistence forecast. It is band-limited,
+not smooth: the shortest period it can represent is `2 n / (G_L − 1)` steps —
+`4.36` steps, 22 min, at the 2 h forecast — and oscillation slower than that
+passes through unattenuated. A fixed `G` in place of `G_L` is the identity at
+`L = 1` and stops contracting. The `cumsum` of strictly-positive spreads
+guarantees a monotone ascending fan around the median.
 `carry_spread` defaults to `0` (only rolling inflation uses a non-zero value, §9).
 
 ### 8.2 The per-span median DCT basis
@@ -577,6 +579,7 @@ then normalize each column to unit L2 norm.
 ```
 
 `G` is `min(G_L, n)`, the span-scaled dimension of [§3.1](#31-recovering-dimensions).
+`G_L` scales with `L`, so the cut-off period is the same at every span length.
 This basis is **not** saved in the checkpoint — recompute it, once per span
 length. (The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 6)`, **is**
 saved; read it from the state dict or recompute the same way over `n = 6`.)
