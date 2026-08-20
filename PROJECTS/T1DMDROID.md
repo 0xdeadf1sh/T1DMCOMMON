@@ -76,8 +76,8 @@ geometry of its own: the sequence length, the context bounds, the slot count and
 the span envelope all come from the descriptor, and the whole graph input is built
 in the Rust core.
 
-**And a reconstruction can be PROMOTED into the record.** A masked span painted on
-the BG panel is reconstructed and drawn; from the Lab a deliberate second action
+**And a reconstruction can be PROMOTED into the record.** A stretch selected on the
+BG panel is reconstructed and drawn; a deliberate second action on the same panel
 writes it into `sample` and `cgm_reading` as a stored, syncable value, permanently
 flagged `RECONSTRUCTED`. `../SPEC/invariants.md` §1 carries the narrow exception
 that allows it and the list of what such a value may never do. Four consumers
