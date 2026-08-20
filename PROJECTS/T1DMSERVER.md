@@ -29,8 +29,12 @@ gone. It is now a verbatim store and a read-only fan-out:
 
 - statistics are **pushed by the phone** and stored opaquely; the server computes
   none
-- meals, doses, and prediction curves are **first-class events** keyed by a
-  phone-minted `client_id`; `samples` holds scalars only
+- meals and doses are **first-class events** keyed by a phone-minted
+  `client_id`; `samples` holds scalars only
+- forecasts are **not stored**: they arrive on the stream, are fanned out and
+  drawn live, and are gone when the socket closes
+- a deletion arrives as a **tombstone** on the same upsert; no route serves a
+  `DELETE`
 - the phone's `updated_at` is stored **verbatim** and is the ordering key for
   every idempotent upsert
 - every write fans out to all sessions **except its origin**

@@ -38,6 +38,13 @@ Gaps are explicit. A grid slot with no measurement stores `NULL`; it is never
 back-filled with a neighbouring value at rest. Any gap-filling is a presentation
 step, and a filled value must never be written back as though measured.
 
+One exception, and it is narrow. A model-reconstructed value may be promoted to
+a stored, syncable sample by a deliberate user action, and only while it stays
+permanently flagged as reconstructed (`http-api.md`, `bg_reconstructed`). The
+flag is for life: such a value may never clear an alarm, never count as measured
+context for a cold start or a warm-up, and never enter a statistic as a
+measurement. A carry-forward or interpolated value gets no such route.
+
 ## 2. `tz_offset`
 
 *Binds: all four.*
@@ -480,11 +487,14 @@ re-stamping.
 `updated_at` is the ordering key for every idempotent upsert: a redelivery
 carrying an equal or older value is a no-op; a newer one replaces the record in
 place. This is what makes a durable outbox safe to retry and to deliver out of
-order.
+order. A deletion is an ordinary write carrying a tombstone, so it inherits that
+ordering and cannot be overtaken by a redelivery of the record it removes.
 
 Consequence worth stating: if the phone's clock moves backwards, records it
 writes afterwards carry stamps older than what is stored, and the server will
-correctly ignore them. A backwards clock therefore freezes a record silently.
+correctly ignore them. A backwards clock therefore freezes a record silently —
+and freezes a deletion the same way, leaving a record the patient deleted on
+every other screen.
 
 ### 7.1 CGM source authority
 
@@ -502,7 +512,8 @@ Authority implies activity; the converse does not hold.
 A sample carries `bg_source` (`SPEC/http-api.md`), naming the sensor its `bg`
 came from. It is a label, not a key: one source is authoritative at a time, so a
 slot still holds one reading. A change in it between adjacent slots is a sensor
-change.
+change — except across a reconstructed slot, which carries no `bg_source`
+because no sensor produced it.
 
 ---
 
@@ -530,7 +541,7 @@ defect.
    model-space constants beside them are both correct and serve different
    purposes. Never unify them.
 
-2. **The operator console renders any stored fan as a confident forecast.**
+2. **The operator console renders any streamed fan as a confident forecast.**
    `T1DMDROID` classifies degeneracy — non-finite, mis-ordered quantiles,
    rail-pinned, collapsed band — and withholds a bad forecast from the patient.
    That classification does not cross the wire, and the console does not derive

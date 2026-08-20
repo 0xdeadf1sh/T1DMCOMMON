@@ -129,8 +129,8 @@ not be quoted against a strictly-causal figure without saying so.
 From the app's side it is an ordinary model wherever a model is a fan: it joins
 the running set, selecting it hands it the graph, the alert and the widget as
 selecting any model does, it is scored by the same suite through the same §3.6
-gates, and it syncs under its own id — which the wire allows already, since
-`../SPEC/http-api.md` keys predictions on `(made_at, model_id)`.
+gates, and it streams under its own id — `../SPEC/http-api.md`'s `prediction`
+frame carries `model_id` whatever produced the fan.
 
 **It cannot drive the dose calculator.** `:calc`'s rolled search sizes its
 context from descriptor patch geometry and runs a graph forward per roll with the

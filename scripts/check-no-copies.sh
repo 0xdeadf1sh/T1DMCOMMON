@@ -35,11 +35,11 @@ trap 'rm -rf "$PATDIR"' EXIT
 
 # Each spec's fingerprints, one per line, matched as fixed strings.
 cat >"$PATDIR/http" <<'EOF'
-A server-to-client push stream
 the constant tag `t1dm-login`
-Every write fans out except the origin
 is an opaque store-identity string
 carries no record and has no REST counterpart
+`ts`-keyed cursor could only either repeat or skip
+the marker of a never-pushed window
 EOF
 cat >"$PATDIR/inference" <<'EOF'
 Every tensor lives in exactly one of three spaces

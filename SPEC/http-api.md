@@ -40,7 +40,6 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [PUT /v1/cgm-sources](#put-v1cgm-sources)
   - [GET /v1/cgm-sources](#put-v1cgm-sources)
   - [PUT /v1/basal-schedule](#put-v1basal-schedule)
-  - [PUT /v1/predictions](#put-v1predictions)
   - [PUT /v1/stats](#put-v1stats)
   - [POST /v1/photos](#post-v1photos)
   - [POST /v1/alerts](#post-v1alerts)
@@ -49,8 +48,6 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   - [GET /v1/meals](#get-v1meals)
   - [GET /v1/doses](#get-v1doses)
   - [GET /v1/basal-schedule](#get-v1basal-schedule)
-  - [GET /v1/predictions](#get-v1predictions)
-  - [GET /v1/predictions/latest](#get-v1predictionslatest)
   - [GET /v1/alerts](#get-v1alerts)
   - [GET /v1/photos](#get-v1photos)
   - [GET /v1/photos/{id}](#get-v1photosid)
@@ -62,6 +59,7 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
     - [The store epoch and the re-mirror handshake](#the-store-epoch-and-the-re-mirror-handshake)
 - [WebSocket](#websocket)
   - [GET /v1/stream?token=&lt;secret&gt;](#get-v1streamtokensecret)
+  - [Inbound frames](#inbound-frames)
 
 ## Conventions
 
@@ -86,15 +84,29 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   sent, never re-stamping it. It is the ordering key for the idempotent upsert:
   a redelivery with an equal or older `updated_at` is a no-op, a newer one
   replaces the record in place. The guard is strictly-newer for meals, doses,
-  basal slots, predictions, and statistics blocks.
+  basal slots, and statistics blocks.
   [`POST /v1/ingest`](#post-v1ingest) is the exception: it accepts an
   equal-or-newer `updated_at`, so two partial fills of one grid slot sharing a
-  single `updated_at` both land.
+  single `updated_at` both land. Nothing about that relaxation can undo a
+  deletion: `deleted` is tri-state on that route, so a partial fill that omits
+  the key leaves the row's deletion exactly as it stands whatever its stamp.
+- **Deletion is a write.** A record is never removed from the wire; it is
+  replaced by a **tombstone** — the same upsert carrying `deleted: true`. A
+  tombstone is ordered, redelivered and fanned out exactly as any other write,
+  and every read returns it, so a client catching up learns the deletion instead
+  of re-hydrating over it. Tombstones exist for [meal](#meal-event) and
+  [dose](#dose-event) events and for a whole [sample row](#sample-row); no route
+  serves a `DELETE`. A basal slot needs none — the schedule is full-replaced —
+  and an alert is immutable. A tombstone hides a record; it does not scrub it.
+  The server keeps whatever body the tombstone carried, so a client that wants
+  the content gone omits it, `note` included, or lists the columns on
+  [`POST /v1/ingest`](#post-v1ingest)'s `clear`.
 - **`received_at` never crosses the wire.** The server's internal arrival stamp
   for a phone-authored record is present in neither a read response nor a stream
   frame. The server-assigned `id` and `created_at` are read-only but *are*
   surfaced, on the records that carry them — [Photo](#photo-metadata) and
-  [Alert](#alert). A meal, dose, basal slot, or prediction carries neither.
+  [Alert](#alert). A meal, dose, or basal slot carries neither, and a
+  [prediction](#prediction) is never stored, so it has no server id to surface.
 - **Storage units are fixed:** blood glucose in mg/dL; heart rate in bpm, steps
   as a count, and mood as a small integer; `sleep` is stored as a plain scalar
   magnitude, and `exercise` as grams of carbohydrate equivalent per bucket
@@ -107,12 +119,14 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   the event `ts`; a parametric meal or dose instead carries its curve parameters
   and leaves `custom_curve` `null`.
 - **Null asymmetry.** On a write (phone → server) an absent optional field may
-  be omitted or sent as explicit `null` — the two are equivalent. For a sample,
-  either form leaves the stored column untouched. On a read (server → phone) a
-  missing value is explicit `null`, never omitted. This holds for the optional
-  curve parameters of a [meal](#meal-event) or [dose](#dose-event) event too —
-  the key is always present on the REST read and on the stream frame alike —
-  even though a writer may omit it.
+  be omitted or sent as explicit `null` — the two are equivalent, everywhere and
+  on every route. For a sample, either form leaves the stored column untouched;
+  a column is cleared by naming it on [`POST /v1/ingest`](#post-v1ingest)'s
+  `clear` array and in no other way. On a read (server → phone) a missing value
+  is explicit `null`, never omitted. This holds for the optional curve
+  parameters of a [meal](#meal-event) or [dose](#dose-event) event too — the key
+  is always present on the REST read and on the stream frame alike — even though
+  a writer may omit it.
 
 ## Authentication
 
@@ -168,7 +182,7 @@ An error returns the mapped HTTP status with a JSON body:
 | 400 Bad Request | Malformed body or query — a body that is not valid JSON or does not match the endpoint's schema, a missing or mistyped field, a missing or non-`application/json` `Content-Type` on a JSON route, a bad field name, an unrecognized stats window, an off-grid `ts` on `POST /v1/ingest`, `PUT /v1/meals`, or `PUT /v1/doses`, a missing multipart part |
 | 401 Unauthorized | Missing, unknown, or revoked bearer token |
 | 403 Forbidden | A valid `ro` token on a write endpoint |
-| 404 Not Found | Unknown resource id (photo, model) |
+| 404 Not Found | Unknown resource id (photo, model), or a path this contract version does not serve — the prediction routes withdrawn at `0.5.0` answer here, with an empty body |
 | 405 Method Not Allowed | A registered path addressed with a method it does not serve |
 | 413 Payload Too Large | A request body exceeding the 16 MiB ceiling |
 | 500 Internal Server Error | Store or filesystem failure |
@@ -193,12 +207,14 @@ is present and an absent optional is explicit `null`, [meal](#meal-event) and
   "tz_offset": 0,
   "bg": 112.0,
   "bg_source": "s_0f1e2d3c",
+  "bg_reconstructed": false,
   "hr": 68.0,
   "steps": 30.0,
   "sleep": 0.0,
   "exercise": 0.0,
   "mood": 4,
-  "updated_at": 1735689605000
+  "updated_at": 1735689605000,
+  "deleted": false
 }
 ```
 
@@ -216,7 +232,25 @@ written before contract `0.4.0`.
 
 Its value is opaque and stable per sensor; the server compares it and never
 parses it. A change in `bg_source` between adjacent slots is a sensor change,
-which is the one thing a reader can conclude from it.
+which is the one thing a reader can conclude from it. A reconstructed sample
+carries no `bg_source` — no sensor produced it — so a reader ignores the
+transition into and out of a `bg_reconstructed` slot before concluding that.
+
+`bg_reconstructed` marks a `bg` a model reconstructed over a sensor gap and a
+deliberate user action then promoted to a stored sample. On a read it is always
+a non-null boolean: a row written before contract `0.5.0` was never promoted, so
+`false` is a fact about it and not an unknown. On a write the key is optional and
+its absence means `false`. It travels with `bg` and only with it.
+**A reconstructed reading is not a measurement** — `invariants.md` §1 says what
+may and may not be done with one.
+
+`deleted` marks a tombstoned row. It hides the row rather than scrubbing it: the
+scalars, `bg_source` and `bg_reconstructed` read back as whatever the writer last
+sent, because the server stores what it receives and does not decide what a
+deletion means. A physiologic reader excludes a tombstone; a catch-up reader
+needs it. Neither `deleted` nor `bg_reconstructed` is a series name; neither may
+appear in the `fields` allowlist of [`GET /v1/series`](#get-v1series) nor in the
+`clear` array of [`POST /v1/ingest`](#post-v1ingest).
 
 ### CGM source
 
@@ -248,6 +282,7 @@ sensor. Omitting it is not a contract change.
   "ts": 1735689600000,
   "tz_offset": 0,
   "updated_at": 1735689605000,
+  "deleted": false,
   "grams": 40.0,
   "duration_min": 180.0,
   "gi": 52.0,
@@ -271,6 +306,12 @@ sensor. Omitting it is not a contract change.
   carried by a mixed or builder meal (whose `gi`/`k`/`theta` are then `null`);
   `null` on a parametric meal, the case shown above.
 - `note` — optional free text.
+- `deleted` — `true` on a tombstone, `false` otherwise; always present on a
+  read, optional on a write where its absence means `false`. `grams` and
+  `duration_min` are required when `deleted` is `false` and ignored when it is
+  `true`, so a client that no longer holds the body can still tombstone; they
+  read back as `0.0` where a tombstone omitted them. Every other field of a
+  tombstone is meaningless.
 
 ### Dose event
 
@@ -280,6 +321,7 @@ sensor. Omitting it is not a contract change.
   "ts": 1735689600000,
   "tz_offset": 0,
   "updated_at": 1735689605000,
+  "deleted": false,
   "kind": "bolus",
   "units": 4.0,
   "duration_min": 300.0,
@@ -300,7 +342,10 @@ sensor. Omitting it is not a contract change.
   discrete `basal`; `null` on a `bolus`, as above.
 - `custom_curve` — a resolved action curve as `[f64]` on the 5-minute grid,
   `null` when the dose is parametric.
-- `client_id`, `ts`, `note` — as for a [meal event](#meal-event).
+- `client_id`, `ts`, `note`, `deleted` — as for a [meal event](#meal-event).
+  `kind`, `units` and `duration_min` are required when `deleted` is `false` and
+  ignored when it is `true`; a tombstone that omits them reads back `"bolus"`
+  and `0.0`.
 
 ### Basal schedule
 
@@ -333,6 +378,9 @@ sensor. Omitting it is not a contract change.
 
 ### Prediction
 
+The payload of the `prediction` stream frame, in both directions. It has no REST
+route and the server stores none — see [Inbound frames](#inbound-frames).
+
 ```json
 {
   "made_at": 1735689600000,
@@ -351,8 +399,9 @@ sensor. Omitting it is not a contract change.
 }
 ```
 
-- `made_at` — the phone's cycle timestamp for the forecast, stored verbatim;
-  with `model_id` it forms the idempotency key.
+- `made_at` — the phone's cycle timestamp for the forecast. It orders the frames
+  a receiver holds, tie-broken on `updated_at`. Nothing is keyed and nothing is
+  stored.
 - `line` — the predicted median series, length `horizon_steps`, in mg/dL.
 - `fan` — a `7 × horizon_steps` matrix, one row per quantile level in the exact
   ascending order `[0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95]`. Row index 3 (the
@@ -488,10 +537,11 @@ pushed block whose metrics happen to be zero.
 
 ### POST /v1/ingest
 
-Atomic five-minute bundle of the scalar series. Physiologic fields are
-optional; those present overwrite the row at `ts` in place, those absent leave
-the existing values untouched. Writing the row broadcasts a `sample` event to
-every live-stream session except those of the origin token.
+Atomic five-minute bundle of the scalar series. Each physiologic field is
+tri-state: a **value** overwrites the column at `ts`, an **omitted** key leaves
+it untouched, and the column is **cleared** by naming it in the `clear` array.
+Writing the row broadcasts a `sample` event to every live-stream session except
+those of the origin token.
 
 Request:
 
@@ -501,16 +551,48 @@ Request:
   "tz_offset": 0,
   "updated_at": 1735689605000,
   "bg": 112.0,
+  "bg_source": "s_0f1e2d3c",
   "hr": 68.0, "steps": 30.0, "sleep": 0.0, "exercise": 0.0, "mood": 4
 }
 ```
 
-`ts`, `tz_offset`, and `updated_at` are required; the six physiologic scalars
-are optional. `updated_at` is the phone's clock and is stored verbatim; the row
-is upserted on `ts`, and a partial redelivery re-applies when its `updated_at`
-is equal or newer, and is ignored when older. Predictions are written through
-their own endpoint ([`PUT /v1/predictions`](#put-v1predictions)), not embedded
-here.
+`ts`, `tz_offset`, and `updated_at` are required; everything else is optional.
+`updated_at` is the phone's clock and is stored verbatim; the row is upserted on
+`ts`, and a partial redelivery re-applies when its `updated_at` is equal or
+newer, and is ignored when older. Forecasts are not written here and have no
+write route at all — they travel as an [inbound stream frame](#inbound-frames).
+
+`clear` is an array of column names to clear, each one of `bg`, `hr`, `steps`,
+`sleep`, `exercise`, `mood`. It is the only way to erase a stored scalar; an
+explicit `null` on the field itself leaves the column untouched, exactly as
+omitting it does, so a writer whose serializer drops null-valued keys loses
+nothing. A name that is not one of the six is rejected with `400`, as is a name
+that also appears as a value in the same body — the two would contradict each
+other. `deleted` and `bg_reconstructed` are not column names here.
+
+```json
+{ "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689610000, "clear": ["bg"] }
+```
+
+`bg_source` and `bg_reconstructed` travel with `bg` and only with it. A bundle
+that neither carries `bg` nor clears it leaves both as they stand; one that sets
+`bg` sets both, to `null` and `false` when it omits them; one that clears `bg`
+clears both. Clearing `bg` therefore clears its label and its flag.
+
+`deleted` is tri-state, unlike the two-state field the read carries: `true`
+tombstones the whole row at `ts`, `false` revives it, and an **omitted** key
+leaves the row's deletion exactly as it stands. Ingest is a partial-fill path by
+construction — a later steps-only bundle, or the phone's own delayed CGM
+backfill into a past slot, must not revive a row the patient deleted, and an
+omitted key is how it says so. A tombstone does not clear the row's stored
+values; a writer that wants them gone lists them in `clear`. The row still
+exists and is still returned by [`GET /v1/series`](#get-v1series).
+
+A tombstone:
+
+```json
+{ "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689610000, "deleted": true }
+```
 
 Response `200`:
 
@@ -543,9 +625,14 @@ Request:
 ]
 ```
 
-`client_id`, `ts`, `tz_offset`, `updated_at`, `grams`, and `duration_min` are
-required; the curve parameters, `custom_curve`, and `note` are optional, and an
-absent one may be omitted or sent as `null`. A parametric meal carries
+`client_id`, `ts`, `tz_offset`, and `updated_at` are always required, and
+`grams` and `duration_min` are required whenever `deleted` is `false`; the curve
+parameters, `custom_curve`, and `note` are optional, and an absent one may be
+omitted or sent as `null`. `deleted` defaults to `false` and is decoded first, so
+a live body missing `grams` or `duration_min` is still `400` while a tombstone
+(`deleted: true`) needs only `client_id`, `ts`, `tz_offset` and `updated_at`. A
+tombstone rides the same strictly-newer guard, so a redelivery of the meal it
+deletes is already a no-op, and it fans out as an ordinary `meal` event. A parametric meal carries
 `gi`/`k`/`theta`; a mixed or builder meal carries its resolved appearance curve
 in `custom_curve` instead. Idempotent by `client_id`: a redelivery is a no-op,
 a newer `updated_at` replaces the row in place. Fans out a `meal` event to
@@ -580,9 +667,13 @@ Request:
 ]
 ```
 
-`client_id`, `ts`, `tz_offset`, `updated_at`, `kind`, `units`, and
-`duration_min` are required; the curve parameters, `custom_curve`, and `note`
-are optional, and an absent one may be omitted or sent as `null`. A `bolus`
+`client_id`, `ts`, `tz_offset`, and `updated_at` are always required, and
+`kind`, `units` and `duration_min` are required whenever `deleted` is `false`;
+the curve parameters, `custom_curve`, and `note` are optional, and an absent one
+may be omitted or sent as `null`. `deleted` behaves exactly as on
+[meals](#put-v1meals): decoded first, so a live body missing one of the three is
+still `400`, while a tombstone needs only `client_id`, `ts`, `tz_offset` and
+`updated_at`. A `bolus`
 carries gamma `k`/`theta`; a discrete `basal` carries Bateman
 `ka_per_hour`/`ke_per_hour`; either may instead carry a resolved
 `custom_curve`. Idempotent by `client_id`: a redelivery is a no-op, a newer
@@ -660,41 +751,6 @@ Response `200` — the stored slot `client_id`s:
 
 ```json
 { "ok": true, "ids": ["018f9c8a-...-b2"] }
-```
-
-### PUT /v1/predictions
-
-Upsert one or more predictions. The body is a JSON array of
-[prediction](#prediction) write objects.
-
-Request:
-
-```json
-[
-  {
-    "made_at": 1735689600000,
-    "model_id": "lstm-v3",
-    "updated_at": 1735689605000,
-    "horizon_steps": 24,
-    "line": [112.0],
-    "fan": [[…], […], […], […], […], […], […]],
-    "circadian": { "probs": [0.0, 0.1], "predicted_hour": 7.5, "resultant_r": 0.8, "n_bins": 12, "bin_hours": 2.0 }
-  }
-]
-```
-
-`made_at`, `model_id`, `updated_at`, `horizon_steps`, `line`, and `fan` are
-required; `circadian` is `null` when the model has no circadian head. `made_at`
-is the phone's cycle timestamp, stored verbatim. Keyed idempotent on `(made_at,
-model_id)` and guarded on the phone clock, as meals, doses, basal slots, and
-statistics blocks are: a re-run carrying a newer `updated_at` overwrites the
-forecast in place, while a redelivery with an equal or older `updated_at` is a
-no-op. Fans out a `prediction` event to every session except the origin.
-
-Response `200` — the canonical row ids, in input order:
-
-```json
-{ "ok": true, "ids": [42] }
 ```
 
 ### PUT /v1/stats
@@ -798,13 +854,16 @@ Query parameters:
 
 Rows are returned in ascending `ts` order and always carry the full wide schema
 (every series column present, `null` for gaps) regardless of `fields`.
+Tombstoned rows are returned like any other, carrying `deleted: true` and
+whatever values their last writer sent; they count against `limit` and set
+`next_cursor` as any row does.
 
 Response `200`:
 
 ```json
 {
   "rows": [
-    { "ts": 1735689600000, "tz_offset": 0, "bg": 112.0, "hr": 68.0, "steps": null, "sleep": null, "exercise": null, "mood": null, "updated_at": 1735689605000 }
+    { "ts": 1735689600000, "tz_offset": 0, "bg": 112.0, "bg_source": "s_0f1e2d3c", "bg_reconstructed": false, "hr": 68.0, "steps": null, "sleep": null, "exercise": null, "mood": null, "updated_at": 1735689605000, "deleted": false }
   ],
   "next_cursor": 1735689600000
 }
@@ -833,7 +892,8 @@ Response `200`:
 ```
 
 Every field is present; an absent optional is explicit `null`. The server's
-internal `id` and stamps are not returned.
+internal `id` and stamps are not returned. Tombstones are returned, `deleted:
+true`, so a catch-up learns a deletion instead of re-hydrating over it.
 
 This route is **not paginated** and returns no cursor. `limit` is a plain cap on
 the number of rows, not a page size: a caller that supplies it and receives
@@ -859,8 +919,8 @@ Response `200`:
 }
 ```
 
-`limit` behaves exactly as for [`GET /v1/meals`](#get-v1meals), and this route
-is likewise not paginated.
+`limit` behaves exactly as for [`GET /v1/meals`](#get-v1meals); this route is
+likewise not paginated and likewise returns tombstones.
 
 ### GET /v1/basal-schedule
 
@@ -882,26 +942,6 @@ Response `200`:
 The response body is one [Basal schedule](#basal-schedule) object, or the
 literal `null` when no schedule is active. The `basal_schedule` stream frame
 carries the same fields inline alongside its `type` discriminant.
-
-### GET /v1/predictions
-
-Query: `from`, `to` (inclusive bounds on `made_at`). Newest first.
-
-Response `200`:
-
-```json
-{ "predictions": [ { "made_at": 1735689600000, "model_id": "lstm-v3", "…": "…" } ] }
-```
-
-### GET /v1/predictions/latest
-
-The single most recent prediction, or `null`.
-
-Response `200`:
-
-```json
-{ "prediction": { "made_at": 1735689600000, "…": "…" } }
-```
 
 ### GET /v1/alerts
 
@@ -1034,7 +1074,8 @@ state and compares the served value against that on every poll:
   subset of its authoritative history it holds through the write endpoints —
   scalar samples via [`POST /v1/ingest`](#post-v1ingest), then meals, doses,
   the active basal schedule, and the latest block for each statistics window —
-  and only then persist the new epoch.
+  and only then persist the new epoch. Tombstones need not be replayed: a store
+  that never held the record has nothing to delete.
 - **`null`** — the marker is unknown; the client leaves its persisted value
   untouched and replays nothing.
 
@@ -1042,11 +1083,12 @@ Every write is idempotent on its phone-minted key, so a replay is safe to
 interrupt and resume, and cannot duplicate a record.
 
 A teardown discards every record the store holds, not only those the replay
-above restores: the predictions, alerts, and photo binaries written through
-[`PUT /v1/predictions`](#put-v1predictions), [`POST /v1/alerts`](#post-v1alerts),
-and [`POST /v1/photos`](#post-v1photos) are gone with the rest, and exist on the
-new store only once re-posted through those same endpoints. Model artifacts are the sole exception — they live on
-disk, survive the wipe, and are re-registered by the next scan.
+above restores: the alerts and photo binaries written through
+[`POST /v1/alerts`](#post-v1alerts) and [`POST /v1/photos`](#post-v1photos) are
+gone with the rest, and exist on the new store only once re-posted through those
+same endpoints. Forecasts are never at risk, because none is stored. Model
+artifacts are the sole exception — they live on disk, survive the wipe, and are
+re-registered by the next scan.
 
 ---
 
@@ -1054,12 +1096,12 @@ disk, survive the wipe, and are re-registered by the next scan.
 
 ### GET /v1/stream?token=&lt;secret&gt;
 
-A server-to-client push stream. Authentication is the `token` query parameter;
-an invalid or revoked token is rejected with `401` before the upgrade. After the
-upgrade the server sends events as they occur; inbound frames from the client
-are ignored (a Close frame ends the stream). Either `rw` or `ro` tokens may
-subscribe. Sessions — and thus the record of a connected viewer — persist across
-reconnects.
+A server-to-client push stream with one inbound exception, specified under
+[Inbound frames](#inbound-frames). Authentication is the `token` query
+parameter; an invalid or revoked token is rejected with `401` before the
+upgrade. After the upgrade the server sends events as they occur. Either `rw` or
+`ro` tokens may subscribe. Sessions — and thus the record of a connected viewer
+— persist across reconnects.
 
 The server also closes the socket on its own initiative. Authentication is
 resolved once, at the upgrade, so an upgraded stream re-checks every 30 seconds
@@ -1072,21 +1114,22 @@ before the stream is available again. The other server-initiated close follows
 a `lagged` frame, described below.
 
 Each event is a JSON object with a `"type"` discriminant and the event's fields
-inlined alongside it. The eight record types — `sample`, `prediction`, `photo`,
-`alert`, `meal`, `dose`, `basal_schedule`, and `stats` — carry, respectively,
-the [Sample row](#sample-row), [Prediction](#prediction),
+inlined alongside it. The nine record types — `sample`, `prediction`, `photo`,
+`alert`, `meal`, `dose`, `basal_schedule`, `cgm_source`, and `stats` — carry,
+respectively, the [Sample row](#sample-row), [Prediction](#prediction),
 [Photo](#photo-metadata), [Alert](#alert), [Meal event](#meal-event),
-[Dose event](#dose-event), [Basal schedule](#basal-schedule), and
-[Stats](#stats) schemas.
+[Dose event](#dose-event), [Basal schedule](#basal-schedule),
+[CGM source](#cgm-source), and [Stats](#stats) schemas.
 
-`stats` is the sole exception to the inlining: its frame carries `window` and
-`updated_at` at the top level and nests the pushed statistics block whole under
-a `json` key. The block under `json` is the phone's body echoed verbatim, so it
+Two types do not inline. `cgm_source` carries an array of
+[CGM source](#cgm-source) objects under a `sources` key, one frame per batch.
+`stats` carries `window` and `updated_at` at the top level and nests the pushed
+statistics block whole under a `json` key. The block under `json` is the phone's body echoed verbatim, so it
 repeats its own `window` and `updated_at`. The REST shape differs —
 [`GET /v1/stats`](#get-v1stats) returns the metrics flat under a `stats` key —
 so a client must decode the two separately.
 
-A ninth type, `lagged`, carries no record and has no REST counterpart. The
+A tenth type, `lagged`, carries no record and has no REST counterpart. The
 server emits it when the broadcast buffer overran and events were dropped
 before this session could read them; `missed` is how many. It is the last frame
 of that socket — the server closes immediately after sending it. The dropped
@@ -1095,7 +1138,7 @@ incomplete mirror and must resynchronise through the range reads from its own
 high-water marks rather than trust its incremental cursor.
 
 ```json
-{ "type": "sample",         "ts": 1735689600000, "tz_offset": 0, "bg": 112.0, "hr": 68.0, "steps": null, "sleep": null, "exercise": null, "mood": null, "updated_at": 1735689605000 }
+{ "type": "sample",         "ts": 1735689600000, "tz_offset": 0, "bg": 112.0, "bg_source": "s_0f1e2d3c", "bg_reconstructed": false, "hr": 68.0, "steps": null, "sleep": null, "exercise": null, "mood": null, "updated_at": 1735689605000, "deleted": false }
 ```
 
 ```json
@@ -1111,15 +1154,19 @@ high-water marks rather than trust its incremental cursor.
 ```
 
 ```json
-{ "type": "meal",           "client_id": "018f9c8a-...-e7", "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689605000, "grams": 40.0, "duration_min": 180.0, "gi": 52.0, "k": 2.0, "theta": 30.0, "custom_curve": null, "note": "oatmeal" }
+{ "type": "meal",           "client_id": "018f9c8a-...-e7", "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689605000, "deleted": false, "grams": 40.0, "duration_min": 180.0, "gi": 52.0, "k": 2.0, "theta": 30.0, "custom_curve": null, "note": "oatmeal" }
 ```
 
 ```json
-{ "type": "dose",           "client_id": "018f9c8a-...-a1", "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689605000, "kind": "bolus", "units": 4.0, "duration_min": 300.0, "k": 2.0, "theta": 40.0, "ka_per_hour": null, "ke_per_hour": null, "custom_curve": null, "note": null }
+{ "type": "dose",           "client_id": "018f9c8a-...-a1", "ts": 1735689600000, "tz_offset": 0, "updated_at": 1735689605000, "deleted": false, "kind": "bolus", "units": 4.0, "duration_min": 300.0, "k": 2.0, "theta": 40.0, "ka_per_hour": null, "ke_per_hour": null, "custom_curve": null, "note": null }
 ```
 
 ```json
 { "type": "basal_schedule", "schedule_id": "default", "active": true, "slots": [ { "client_id": "018f9c8a-...-b2", "label": "overnight", "time_of_day_min": 0, "dose_u": 0.8, "duration_min": 480.0, "ka_per_hour": 0.9, "ke_per_hour": 0.5, "tz_offset": 0, "updated_at": 1735689605000 } ] }
+```
+
+```json
+{ "type": "cgm_source",     "sources": [ { "id": "s_0f1e2d3c", "family": "examplevendor", "model": "examplevendor:m1", "serial": "SN-EXAMPLE-0001" } ] }
 ```
 
 ```json
@@ -1132,8 +1179,53 @@ high-water marks rather than trust its incremental cursor.
 
 **Every write fans out except the origin.** A write is delivered to every
 connected session **except** those belonging to the token that authored it, so a
-client never receives an echo of its own write. Because the phone is the sole
-read-write author, in practice it never receives a live `sample`, `meal`,
-`dose`, `basal_schedule`, or `stats` event; it hydrates any history missed while
-offline through REST catch-up (`GET /v1/series`, `GET /v1/meals`,
-`GET /v1/doses`), not the stream.
+client never receives an echo of its own write. The inbound `prediction` frame
+follows the same rule. Because the phone is the sole read-write author, in
+practice it never receives a live `sample`, `meal`, `dose`, `basal_schedule`,
+`cgm_source`, `stats`, or `prediction` event; it hydrates any history missed
+while offline through REST catch-up (`GET /v1/series`, `GET /v1/meals`,
+`GET /v1/doses`), not the stream. Forecasts are not part of that catch-up —
+nothing stores them, so nothing can serve them back.
+
+### Inbound frames
+
+The stream accepts exactly one frame from the client:
+
+```json
+{ "type": "prediction", "made_at": 1735689600000, "model_id": "lstm-v3", "updated_at": 1735689605000, "horizon_steps": 24, "line": [112.0], "fan": [[…]], "circadian": null }
+```
+
+It carries the [Prediction](#prediction) schema **inlined beside the
+discriminant**, identical in shape to the outbound `prediction` frame. There is
+no wrapper key: a frame nesting the payload under a `body` key does not match
+this schema and is dropped.
+
+- **Only an `rw` session may send it.** A frame from an `ro` session is dropped:
+  nothing is fanned out, nothing is drawn, and the socket stays open. That is
+  the stream's analogue of the `403` an `ro` token gets on a write route. There
+  is no inbound error frame and no acknowledgement of any kind.
+- **The server stores nothing.** It fans the frame out to every session except
+  the origin's and hands it to its own console, which keeps the single most
+  recent frame overall — not one per model — replacing what it holds when the
+  arriving `(made_at, updated_at)` pair is at least the held one's, so the last
+  forecast of a cycle is the one drawn. The frame's `model_id` says which model
+  produced it. Nothing survives a restart and no route serves a forecast back.
+- **A forecast that finds no open socket is lost, not queued.** The next cycle
+  supersedes it; a client must not buffer forecasts for later delivery.
+- **A client re-sends its most recent forecast on every (re)connect**, as its
+  first frame after the upgrade. Without it a receiver draws nothing for up to a
+  cycle after any restart, reconnect or socket wedge, and cannot tell that from
+  a model that withheld a degenerate forecast. One frame closes that window. A
+  client with no forecast to re-send sends nothing.
+- **A frame that is not valid JSON, carries an unknown `type`, or does not match
+  the schema is dropped** — no fan-out, no close, no reply. `horizon_steps` has
+  no ceiling on this contract: `line` must be `horizon_steps` long and `fan` a
+  `7 × horizon_steps` matrix, and the byte ceiling below is the only resource
+  bound. Neither side may invent a maximum horizon of its own.
+- **A frame above 256 KiB is dropped**, socket left open, like any other frame
+  the server will not act on. A receiver additionally caps the transport
+  strictly above that — 1 MiB — so the in-band check is what normally rejects an
+  oversized frame and the transport bound only catches abuse, closing the socket
+  at the protocol layer before any content is read. The client reconnects with
+  backoff, as after `lagged`. A 24-step forecast is a couple of KiB.
+- A binary frame is dropped. A Close frame ends the stream.
