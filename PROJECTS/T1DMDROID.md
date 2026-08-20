@@ -81,9 +81,26 @@ trunk's hidden state per slot and the export ships the head's weights beside the
 artifact, so the app can reproduce `head_raw` outside the graph and put a low-rank
 adapter in front of it. The trunk stays frozen inside the `.pte`; a fit is a few
 thousand numbers trained from the patient's own matured windows. A head that does
-not reproduce the graph's own output is refused rather than used. Attaching or
+not reproduce the graph's own output is refused rather than used.
+
+**An adapter is refused at attach unless it has been measured against the model's
+own dose response.** A few thousand parameters fitted to one patient's weeks can
+null the model's marginal response to insulin with a rank-1 map, score better on
+the loss it was fitted on, and leave the dose calculator reading a forecaster that
+does not move when insulin is added — which is exactly what the predicted-low veto
+tests, since that rail reads the median line and not a band edge. Two independent
+things stand against it: a distillation term that pins the adapted response to the
+frozen model's during the fit, and a verdict measured on held-out forecast windows
+and stored on the adapter's row. The refusal is structural rather than a disabled
+button, it covers an adapter nobody measured as well as one that failed, and it is
+overridable only by a deliberate second action that sticks to that row. Attaching or
 detaching an adapter drops that model's band correction and stored predictions —
 both described the forecaster that was there before.
+
+A channel-affecting edit or deletion of a logged meal or dose drops the same two, from the other
+direction: those forecasts were conditioned on a history that no longer exists. The band
+correction goes only where the window it was fitted over reaches the change — a blanket drop would
+narrow the displayed band over a week-old correction, which is the wrong direction to fail in.
 
 Agreement between the fp16 GPU path and the fp32 CPU path is measured and
 surfaced; safety decisions gate on it. A non-authoritative backend may render a
@@ -160,6 +177,13 @@ The fail-closed architecture, which is load-bearing and must not be weakened:
   collapsed band, mis-ordered quantiles
 - **every rail structurally fail-closed** on missing, degenerate, or stale input:
   it blocks rather than silently doing nothing
+- a **dose-history rail** blocking while an edited or deleted dose could still be
+  acting. It is what makes a mutable log defensible: IOB is computed from logged
+  doses alone, so lowering one — a shortened duration, a reduced dose, the
+  deletion of a dose that is not the newest — relaxes the IOB ceiling with nothing
+  else moving. Its window is the LATER of the changed dose's pre-edit and
+  post-edit action ends, and only a deliberate acknowledgement of that specific
+  change clears it
 - a **freshness gate** refusing to dose off a stale or interpolated anchor
 - an **fp16 ↔ fp32 agreement gate**
 - a point-of-decision confirmation the user must acknowledge
@@ -180,15 +204,22 @@ invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
 Two, and only the first is a contract:
 
 - **`T1DMSERVER`** — the full record, both directions, `SPEC/http-api.md`.
-- **The Nightscout bridge** — off by default. One way, and only BG, carbohydrate
-  and bolus, to a host speaking the Nightscout `/api/v1` subset. Not a
-  specification: it binds nothing but `T1DMDROID`, and nothing about it belongs
+- **The Nightscout bridge** — **retired: it sends nothing.** One constant,
+  `NIGHTSCOUT_BRIDGE_SENDS` in `sync/…/nightscout/NightscoutConfig.kt`, holds it
+  off, and the client, the mappers, the drainer branch, the settings screen and
+  the config store are all intact behind it. Its queued rows were purged once
+  rather than drained, because draining one IS sending it. One way, and only BG,
+  carbohydrate and bolus, to a host speaking the Nightscout `/api/v1` subset. Not
+  a specification: it binds nothing but `T1DMDROID`, and nothing about it belongs
   in `SPEC/`.
 
-Both ride one durable outbox, distinguished by `OutboxKind`. The bridge's failures
-are its own: a host that is off, unreachable, or rejecting its credential backs off
-one row and must never stand the queue down, because that would let a third party
-stall the patient's own sync.
+The server record rides the durable outbox, distinguished by `OutboxKind`. A
+forecast does not: at contract `0.5.0` it goes up the WebSocket, nothing stores
+it, and a frame that finds no socket is lost rather than queued.
+
+The bridge's failures were its own: a host that is off, unreachable, or rejecting
+its credential backs off one row and must never stand the queue down, because that
+would let a third party stall the patient's own sync.
 
 Basal and exercise are withheld deliberately. Nightscout's basal is a **rate**
 where §3 makes ours an **amount**, and `exercise` is carbohydrate-equivalent
