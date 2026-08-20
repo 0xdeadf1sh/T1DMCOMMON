@@ -38,12 +38,19 @@ Gaps are explicit. A grid slot with no measurement stores `NULL`; it is never
 back-filled with a neighbouring value at rest. Any gap-filling is a presentation
 step, and a filled value must never be written back as though measured.
 
+A slot is therefore in one of three states, not two: measured, empty, or
+tombstoned. A tombstone is a deletion the patient authored; it hides the row and
+is not a gap the sensor left, and it must never be re-filled by a redelivery of
+the value it retired.
+
 One exception, and it is narrow. A model-reconstructed value may be promoted to
 a stored, syncable sample by a deliberate user action, and only while it stays
 permanently flagged as reconstructed (`http-api.md`, `bg_reconstructed`). The
-flag is for life: such a value may never clear an alarm, never count as measured
-context for a cold start or a warm-up, and never enter a statistic as a
-measurement. A carry-forward or interpolated value gets no such route.
+flag is for life: such a value may never clear an alarm, never anchor or
+condition a dose recommendation, never be a fit target or a fit window's
+context, never count as measured context for a cold start or a warm-up, and
+never enter a statistic as a measurement. A carry-forward or interpolated value
+gets no such route.
 
 ## 2. `tz_offset`
 

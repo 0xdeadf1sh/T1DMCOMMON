@@ -76,6 +76,18 @@ geometry of its own: the sequence length, the context bounds, the slot count and
 the span envelope all come from the descriptor, and the whole graph input is built
 in the Rust core.
 
+**And a reconstruction can be PROMOTED into the record.** A masked span painted on
+the BG panel is reconstructed and drawn; from the Lab a deliberate second action
+writes it into `sample` and `cgm_reading` as a stored, syncable value, permanently
+flagged `RECONSTRUCTED`. `../SPEC/invariants.md` §1 carries the narrow exception
+that allows it and the list of what such a value may never do. Four consumers
+discriminate on the flag rather than trusting the column: the alarm path, which
+may only be cleared by a measured reading; the dose series; the fit's target and
+its windows' context; and the statistics. Promotion refuses a forecast span, a
+backcast with nothing measured before it, a slot that already holds a measurement
+and a degenerate band. Demotion takes it back out, across every sensor the span
+may have been filed under.
+
 **The head is re-runnable, and that is the adapter seam.** The graph emits the
 trunk's hidden state per slot and the export ships the head's weights beside the
 artifact, so the app can reproduce `head_raw` outside the graph and put a low-rank
@@ -201,7 +213,7 @@ invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
 
 ## Outbound destinations
 
-Two, and only the first is a contract:
+Three, and only the first is a contract:
 
 - **`T1DMSERVER`** — the full record, both directions, `SPEC/http-api.md`.
 - **The Nightscout bridge** — **retired: it sends nothing.** One constant,
@@ -212,6 +224,12 @@ Two, and only the first is a contract:
   carbohydrate and bolus, to a host speaking the Nightscout `/api/v1` subset. Not
   a specification: it binds nothing but `T1DMDROID`, and nothing about it belongs
   in `SPEC/`.
+
+- **OpenStreetMap tile servers** — the exercise review's map fetches its basemap
+  tiles directly from them while a bout is being read. Not a specification and not
+  a record: nothing of the patient's is sent, but the request itself discloses
+  which tiles are being looked at, and a review of a recorded route is what that
+  is a function of.
 
 The server record rides the durable outbox, distinguished by `OutboxKind`. A
 forecast does not: at contract `0.5.0` it goes up the WebSocket, nothing stores

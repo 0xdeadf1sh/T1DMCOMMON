@@ -72,6 +72,14 @@ The database grows by roughly a gigabyte per year and is not compacted. Backups
 are taken on demand from the Settings pane — there is no scheduler, despite
 `BackupConfig` existing in the configuration structs, where nothing reads it.
 
+**Take one before first starting a binary that moves the schema forward.** The
+migration ladder runs on open and has no down-migration; the `0.4.0` → `0.5.0`
+step drops the `prediction` table outright, which is irreversible, and the guard
+that refuses to start on a short head is one-sided — it catches a binary older
+than the store, never a store older than the binary that has already been
+migrated. The ladder runs in one transaction, so a failure part-way leaves the
+store as it was; a completed migration is the thing there is no way back from.
+
 The Developer pane's teardown drops and recreates every table and clears the
 photos directory, leaving the models directory alone. It also re-mints the
 `store_epoch`, which is what tells a client to replay its history.

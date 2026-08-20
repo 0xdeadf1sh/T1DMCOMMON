@@ -119,8 +119,9 @@ otherwise. The server binds `server.bind:server.port` (default `0.0.0.0:8443`).
   the event `ts`; a parametric meal or dose instead carries its curve parameters
   and leaves `custom_curve` `null`.
 - **Null asymmetry.** On a write (phone → server) an absent optional field may
-  be omitted or sent as explicit `null` — the two are equivalent, everywhere and
-  on every route. For a sample, either form leaves the stored column untouched;
+  be omitted or sent as explicit `null` — the two are equivalent on every route,
+  with one exception: [`POST /v1/ingest`](#post-v1ingest)'s `clear` is a list and
+  not an optional value, so it is omitted or given, never `null`. For a sample, either form leaves the stored column untouched;
   a column is cleared by naming it on [`POST /v1/ingest`](#post-v1ingest)'s
   `clear` array and in no other way. On a read (server → phone) a missing value
   is explicit `null`, never omitted. This holds for the optional curve
@@ -240,7 +241,8 @@ transition into and out of a `bg_reconstructed` slot before concluding that.
 deliberate user action then promoted to a stored sample. On a read it is always
 a non-null boolean: a row written before contract `0.5.0` was never promoted, so
 `false` is a fact about it and not an unknown. On a write the key is optional and
-its absence means `false`. It travels with `bg` and only with it.
+travels with `bg` and only with it — [`POST /v1/ingest`](#post-v1ingest) states
+what that means in each of the three cases, and is the single authority on it.
 **A reconstructed reading is not a measurement** — `invariants.md` §1 says what
 may and may not be done with one.
 
@@ -503,11 +505,15 @@ clock when the block was computed. The three time-fraction fields (`tir`,
 configured on the phone (default 70–180 mg/dL); the range itself is not carried
 on the wire, so a served fraction cannot be reinterpreted against any other
 pair. `gmi` and `cv` are percentages; `n_samples` is the number of grid samples
-that contributed BG to the window.
+that contributed BG to the window — MEASURED ones only, since `invariants.md` §1
+forbids a reconstructed value entering a statistic as a measurement, and a
+tombstoned slot contributes nothing at all.
 
 `hypo_events` and `hyper_events` carry the producer's notion of an excursion: a
-maximal run of at least two consecutive BG-bearing samples past the configured
-target edge, banded on the same edges as the time fractions. `count` is the number of such
+maximal run of at least two consecutive MEASURED BG-bearing samples past the
+configured target edge, banded on the same edges as the time fractions. A
+reconstructed or tombstoned slot is not BG-bearing here and breaks a run exactly
+as an empty one does. `count` is the number of such
 runs; `duration_ms` is their total, each run measured as its last timestamp
 minus its first — one grid step short of the span the run covers. A dropout of
 up to 30 minutes is bridged into a single episode; a longer one splits the run,
