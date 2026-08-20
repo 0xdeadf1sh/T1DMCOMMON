@@ -189,14 +189,6 @@ The fail-closed architecture, which is load-bearing and must not be weakened:
   collapsed band, mis-ordered quantiles
 - **every rail structurally fail-closed** on missing, degenerate, or stale input:
   it blocks rather than silently doing nothing
-- a **dose-history rail** blocking while an edited or deleted dose could still be
-  acting. It is what makes a mutable log defensible: IOB is computed from logged
-  doses alone, so lowering one — a shortened duration, a reduced dose, the
-  deletion of a dose that is not the newest — relaxes the IOB ceiling with nothing
-  else moving. Its window is the LATER of the changed dose's pre-edit and
-  post-edit action ends, and only a deliberate acknowledgement of that specific
-  change clears it
-- a **freshness gate** refusing to dose off a stale or interpolated anchor
 - an **fp16 ↔ fp32 agreement gate**
 - a point-of-decision confirmation the user must acknowledge
 
