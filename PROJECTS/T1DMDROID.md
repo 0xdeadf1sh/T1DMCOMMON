@@ -216,14 +216,11 @@ invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
 Three, and only the first is a contract:
 
 - **`T1DMSERVER`** — the full record, both directions, `SPEC/http-api.md`.
-- **The Nightscout bridge** — **retired: it sends nothing.** One constant,
-  `NIGHTSCOUT_BRIDGE_SENDS` in `sync/…/nightscout/NightscoutConfig.kt`, holds it
-  off, and the client, the mappers, the drainer branch, the settings screen and
-  the config store are all intact behind it. Its queued rows were purged once
-  rather than drained, because draining one IS sending it. One way, and only BG,
-  carbohydrate and bolus, to a host speaking the Nightscout `/api/v1` subset. Not
-  a specification: it binds nothing but `T1DMDROID`, and nothing about it belongs
-  in `SPEC/`.
+- **The Nightscout bridge** — one way, and only BG, carbohydrate and bolus, to a
+  host speaking the Nightscout `/api/v1` subset. It sends whenever the user has
+  configured a URL and a secret and left the switch on; nothing else gates it.
+  Not a specification: it binds nothing but `T1DMDROID`, and nothing about it
+  belongs in `SPEC/`.
 
 - **OpenStreetMap tile servers** — the exercise review's map fetches its basemap
   tiles directly from them while a bout is being read. Not a specification and not
