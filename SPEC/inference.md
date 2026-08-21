@@ -561,8 +561,8 @@ d_up   = spread[..., :3]                                 # .75/.9/.95
 d_dn   = spread[..., 3:]                                 # .25/.1/.05
 c_up   = carry_spread[..., :3]                           # .75/.9/.95
 c_dn   = carry_spread[..., 3:]                           # .25/.1/.05
-up = m[..., None] + c_up + cumsum(d_up, dim=-1)          # ascending
-dn = m[..., None] − c_dn − cumsum(d_dn, dim=-1)          # descending in value
+up = m[..., None] + hypot(c_up, cumsum(d_up, dim=-1))     # ascending
+dn = m[..., None] − hypot(c_dn, cumsum(d_dn, dim=-1))     # descending in value
 q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) ascending τ
 ```
 
@@ -579,6 +579,12 @@ guarantees a monotone ascending fan around the median.
 rolling inflation uses a non-zero value, §9). A scalar broadcasts to all six and
 is a defect anywhere the six differ: it re-seeds every level from the outermost
 one's accumulation, and the fan stops being a fan.
+
+The carry composes with the span's own spread **in quadrature**, not by addition:
+the two are increments of different rolls, and independent increments add
+variances. Addition is the perfectly-correlated bound, and over four rolls it is
+twice as wide as it should be. `hypot(0, x) = x`, so a zero carry is the identity
+and every non-rolling caller is bit-unaffected.
 
 ### 8.2 The per-span median DCT basis
 
@@ -743,8 +749,8 @@ roll —
    ```
 
    read off the fan the roll just produced — which already carries the incoming
-   `c`, so each roll adds the model's own terminal spread and no more. Every level
-   resumes at the width it reached; the median is untouched.
+   `c`, so each roll folds in the model's own terminal spread and no more. Every
+   level resumes at the width it reached; the median is untouched.
 
 The shipped `inference.predict` and `inference.predict_rolling` implement both
 recipes; `predict_what_if` is `predict` with `overrides`. `predict` takes the
