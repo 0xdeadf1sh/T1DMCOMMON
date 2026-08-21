@@ -559,8 +559,10 @@ m          = anchor + (delta_flat @ Bg @ Bgᵀ).reshape(B, L, S)   # low-freq DC
 spread = softplus(head_raw[..., 1:]) + 1e-3              # strict positive floor
 d_up   = spread[..., :3]                                 # .75/.9/.95
 d_dn   = spread[..., 3:]                                 # .25/.1/.05
-up = m[..., None] + carry_spread + cumsum(d_up, dim=-1)  # ascending
-dn = m[..., None] − carry_spread − cumsum(d_dn, dim=-1)  # descending in value
+c_up   = carry_spread[..., :3]                           # .75/.9/.95
+c_dn   = carry_spread[..., 3:]                           # .25/.1/.05
+up = m[..., None] + c_up + cumsum(d_up, dim=-1)          # ascending
+dn = m[..., None] − c_dn − cumsum(d_dn, dim=-1)          # descending in value
 q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) ascending τ
 ```
 
@@ -572,7 +574,11 @@ not smooth: the shortest period it can represent is `2 n / (G_L − 1)` steps �
 passes through unattenuated. A fixed `G` in place of `G_L` is the identity at
 `L = 1` and stops contracting. The `cumsum` of strictly-positive spreads
 guarantees a monotone ascending fan around the median.
-`carry_spread` defaults to `0` (only rolling inflation uses a non-zero value, §9).
+`carry_spread` is **per level**, in `head_raw[..., 1:]`'s own layout —
+`[.75 .9 .95 | .25 .1 .05]`, six risk-space offsets — and defaults to `0` (only
+rolling inflation uses a non-zero value, §9). A scalar broadcasts to all six and
+is a defect anywhere the six differ: it re-seeds every level from the outermost
+one's accumulation, and the fan stops being a fan.
 
 ### 8.2 The per-span median DCT basis
 
@@ -728,10 +734,17 @@ roll —
    else the `normalize(0)` no-event baseline.
 3. Slide the context forward, dropping the oldest patches once it exceeds
    `MAX_CONTEXT_PATCHES`. BG anchors at the last forecast BG carried across rolls.
-4. To keep the band fan from resetting at each roll seam, carry the accumulated
-   risk-space half-width forward via `assemble_quantiles`'s `carry_spread`
-   (seeded each roll by the terminal-step half-width the model emitted). The
-   median is untouched; only the bands widen as uncertainty accumulates.
+4. To keep the band fan from resetting at each roll seam, carry the terminal-step
+   spread forward via `assemble_quantiles`'s `carry_spread`, **per level**:
+
+   ```
+   c_up[k] = q_tau[−1, −1, 3 + 1 + k] − m[−1, −1]      k = 0,1,2 → .75/.9/.95
+   c_dn[k] = m[−1, −1] − q_tau[−1, −1, 3 − 1 − k]      k = 0,1,2 → .25/.1/.05
+   ```
+
+   read off the fan the roll just produced — which already carries the incoming
+   `c`, so each roll adds the model's own terminal spread and no more. Every level
+   resumes at the width it reached; the median is untouched.
 
 The shipped `inference.predict` and `inference.predict_rolling` implement both
 recipes; `predict_what_if` is `predict` with `overrides`. `predict` takes the
