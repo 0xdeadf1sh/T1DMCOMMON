@@ -19,21 +19,18 @@ that between them implement one physiology and one wire contract.
 
 ## Why this exists
 
-The same facts are needed in more than one repository: the five-minute grid, the
+Some facts are needed in more than one repository: the five-minute grid, the
 physiologic units, the Kovatchev risk transform, the curve mathematics, the
-forecast layout, the contract the app and the server speak, and the model
-contract the app decodes against. Each is written down **once**, here. A project
-that needs one keeps a stub at the path its readers expect, pointing back.
+forecast layout, the app↔server contract, and the model contract the app decodes
+against. Each is written down once, here. A project that needs one keeps a stub
+at the path its readers expect, pointing back.
 
 Duplicated facts drift. Both copies are correct the day they are written and
 disagree later, silently — the software keeps working and one side is wrong.
-This repository holds one copy of each such fact, so the others can reference it
-instead of restating it.
 
-A single copy helps only while it is true, so the obligation runs both ways: a
-change in one of the four projects that contradicts something written here is
-also a change to this repository. Everything here is written in the present tense
-and describes the suite as it stands, not the path it took to get there.
+The obligation runs both ways: a change in one of the four projects that
+contradicts something written here is also a change to this repository.
+Everything here is present tense and describes the suite as it stands.
 
 ## Contents
 
@@ -46,6 +43,7 @@ SPEC/
   inference.md     the model contract: checkpoint, graph, decode, constants
 scripts/
   check-no-copies.sh   fails when a specification has been copied into a project
+  check-contract.sh    fails when a claim made here is false of the suite
 PROJECTS/
   T1DMSIM.md       per-project working knowledge: constraints, traps, gates,
   T1DMAI.md        and the conventions each project's author has settled on
@@ -69,14 +67,14 @@ The four projects are sibling checkouts of this one:
 └── T1DMSERVER
 ```
 
-Work begins here rather than in a project, so the shared rules are in hand
-before any code is: `CLAUDE.md` maps the suite and names each project's local
-rules and gates, and `skills/enter-project` is the ritual for picking one up.
+Work begins here, so the shared rules are in hand before any code is. `CLAUDE.md`
+maps the suite and names each project's local rules and gates;
+`skills/enter-project` is the ritual for picking one up.
 
-`SPEC/invariants.md` closes with two lists — **known deviations**, where an
-implementation is known to disagree with the specification, and **open
-questions**, where the specification is not yet decisive. Both are tracked in
-the open rather than resolved silently.
+`SPEC/invariants.md` closes with three lists — **known deviations**, where an
+implementation disagrees with the specification; **accepted divergences**,
+differences that are deliberate; and **open questions**, where the specification
+is not yet decisive.
 
 ## License
 

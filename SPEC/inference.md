@@ -3,20 +3,19 @@
 *Binds: `T1DMAI` → `T1DMDROID`; its forecast layout is displayed by
 `T1DMSERVER`.*
 
-A hardware- and framework-agnostic account of loading a trained T1DMAI
-checkpoint and producing a blood-glucose (BG) forecast — for anyone shipping
-these models in their own application, on CPU, GPU, NPU, mobile, or a
+A hardware- and framework-agnostic account of loading a trained T1DMAI checkpoint
+and producing a blood-glucose (BG) forecast — on CPU, GPU, NPU, mobile, or a
 non-PyTorch runtime. Verified against `T1DMAI`'s own source: `config.py`,
 `model.py`, `utils.py`, `normalization.py`, `inference.py`.
 
 **This is the only copy.** `T1DMAI` produces what is described here and
-`T1DMDROID` consumes it; each keeps a stub pointing at this document rather than
-a second account of it. Changing anything below is a shared-contract change —
-read `../skills/shared-contract-change` first.
+`T1DMDROID` consumes it; each keeps a stub pointing at this document. Changing
+anything below is a shared-contract change — read
+`../skills/shared-contract-change` first.
 
-Read `invariants.md` alongside this. The two risk spaces, the quantile levels
-and their order, the circadian bins and the five-minute grid are defined there;
-this document says how the model uses them.
+Read `invariants.md` alongside this. The two risk spaces, the quantile levels and
+their order, the circadian bins and the five-minute grid are defined there; this
+document says how the model uses them.
 
 > [!CAUTION]
 > **Research and educational use only.** T1DMAI is trained on synthetic
@@ -25,14 +24,13 @@ this document says how the model uses them.
 > to make medical, diagnostic, or treatment decisions, to calculate or adjust
 > insulin doses, or to manage diabetes in any way. No regulatory clearance.
 
-The model is plain **fp32 PyTorch** — no autocast, no custom CUDA. The parts a
-non-PyTorch runtime must reimplement are the pre/post-processing: per-channel
-normalization, the Kovatchev risk transform, and the quantile assembly. All of
-them are pure numeric, and every constant they need is tabulated in
-[§11](#11-reference-constants). There is **no input smoother** in the reference
-pipeline — the model consumes the raw signal directly (BG only clamped to
-`[BG_CLAMP_MIN, BG_CLAMP_MAX]`, the other channels floored at 0). A consumer may
-pre-filter its own input; that is its choice to make and to document
+The model is plain **fp32 PyTorch** — no autocast, no custom CUDA. A non-PyTorch
+runtime reimplements only the pre/post-processing: per-channel normalization, the
+Kovatchev risk transform, and the quantile assembly. All are pure numeric, and
+every constant they need is tabulated in [§11](#11-reference-constants). There is
+**no input smoother** in the reference pipeline — the model consumes the raw
+signal directly (BG only clamped to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`, the other
+channels floored at 0). A consumer may pre-filter its own input
 ([§7.1](#71-input-filtering-is-the-consumers-choice)).
 
 ## Table of contents
@@ -54,9 +52,9 @@ pre-filter its own input; that is its choice to make and to document
 
 ## 1. Mental model: three spaces
 
-Every tensor lives in exactly one of three spaces, crossed by exactly two
-bridge pairs. Tracking which space a value is in is the single most important
-thing when reimplementing inference.
+Every tensor lives in exactly one of three spaces, crossed by exactly two bridge
+pairs. Tracking which space a value is in is the single most important thing when
+reimplementing inference.
 
 | space | representation |
 |---|---|
@@ -70,14 +68,14 @@ The two bridges:
 - **(b) ↔ (c): `f` / `f_inv`** on the descriptor's own constants — [§5](#5-the-kovatchev-risk-transform-physical--risk).
 
 The model **never sees raw mg/dL** for BG, and it **never emits mg/dL**. Inputs
-are risk-then-z; outputs are risk. Your code owns both bridges: build the input
-by `f` then z; decode the output by `f_inv`.
+are risk-then-z; outputs are risk. Your code owns both bridges: build the input by
+`f` then z; decode the output by `f_inv`.
 
 ---
 
 ## 2. Getting a checkpoint
 
-A checkpoint is a `torch.save` pickle; load it with:
+A checkpoint is a `torch.save` pickle:
 
 ```python
 import torch
@@ -85,8 +83,6 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 ```
 
 ### 2.1 Checkpoint keys
-
-A training-produced checkpoint contains:
 
 | key | contents | needed for inference? |
 |---|---|---|
@@ -102,14 +98,14 @@ A training-produced checkpoint contains:
 | `conformal_delta`, `conformal_meta` | optional band recalibration (§8.4) | optional |
 | `master_seed`, `loss_history`, `val_history`, `loss_ema`, `best_val_*` | telemetry | no |
 
-Some checkpoints carry a leaner set and may **omit
-`training_config`**; in that case recover the architecture dimensions from the
-state-dict tensor shapes ([§3.1](#31-recovering-dimensions)).
+Some checkpoints carry a leaner set and may **omit `training_config`**; recover
+the architecture dimensions from the state-dict tensor shapes
+([§3.1](#31-recovering-dimensions)).
 
 ### 2.2 Which weights to run
 
-Validation and every reported metric were produced under the **EMA** weights, so
-run those. Merge the EMA shadow over the live weights, then load:
+Validation and every reported metric were produced under the **EMA** weights.
+Merge the EMA shadow over the live weights, then load:
 
 ```python
 sd     = ckpt["model_state_dict"]
@@ -121,21 +117,20 @@ model.eval()
 
 ### 2.3 Slimming a shipped checkpoint
 
-For distribution you can drop `muon_optimizer_state_dict`,
-`adam_optimizer_state_dict`, `weighting_state_dict`, and all telemetry. Keep the
-EMA weights (or a pre-merged state dict), `normalization_stats`, and enough of
-`training_config` (or the shapes) to rebuild the graph. Dropping the optimizer
-states shrinks the file to roughly the model size. The `time_head.*` weights are
-a diagnostic hour-of-day probe that never touches the BG forecast — you may drop
-them entirely.
+For distribution, drop `muon_optimizer_state_dict`, `adam_optimizer_state_dict`,
+`weighting_state_dict` and all telemetry; that shrinks the file to roughly the
+model size. Keep the EMA weights (or a pre-merged state dict),
+`normalization_stats`, and enough of `training_config` (or the shapes) to rebuild
+the graph. The `time_head.*` weights are a diagnostic hour-of-day probe that never
+touches the BG forecast and may be dropped.
 
 ---
 
 ## 3. Architecture
 
 `T1DMAI` takes **no constructor arguments**; it reads every dimension from
-`config.py` module globals at construction. To rebuild the graph you set those
-globals (from the checkpoint) and instantiate.
+`config.py` module globals at construction. To rebuild the graph, set those
+globals from the checkpoint and instantiate.
 
 ### 3.1 Recovering dimensions
 
@@ -156,9 +151,9 @@ globals (from the checkpoint) and instantiate.
 | `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 2 | — | `step_basis` cols |
 | `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= K·(1+2·N_SPREADS)` |
 
-A few decode-critical constants are **not** stored anywhere and are fixed
-released defaults — you must reproduce them exactly: `ROPE_BASE = 1000`, RMSNorm
-`eps = 1e-6`, `QUANTILE_LEVELS = (.05, .1, .25, .5, .75, .9, .95)`,
+A few decode-critical constants are **not** stored anywhere and are fixed released
+defaults — reproduce them exactly: `ROPE_BASE = 1000`, RMSNorm `eps = 1e-6`,
+`QUANTILE_LEVELS = (.05, .1, .25, .5, .75, .9, .95)`,
 `BG_QUANTILE_SPREAD_MIN = 1e-3`, `BG_HEAD_MEDIAN_MODE = 'global'`,
 `BG_HEAD_MEDIAN_GLOBAL_DIM = 8`, `BG_HEAD_STEP_BASIS_TYPE = 'dct'`, and the
 Kovatchev constants (§5).
@@ -171,13 +166,13 @@ Kovatchev constants (§5).
 `BG_HEAD_MEDIAN_GLOBAL_DIM = PREDICTION_PATCHES · K`, so `G_L = K · L` at every
 span length: the head emits `L · K` median coefficients per span and the basis
 keeps all of them. A pair that breaks this relation gives the projection a null
-space, and whatever the head emits into it is discarded by the decode and takes
-no gradient from any loss.
+space, and whatever the head emits into it is discarded by the decode and takes no
+gradient from any loss.
 
 `MAX_MASKED_PATCHES` (`M`) is the head's slot count and the training sampler's cap
-on the masked set. It sizes no weight — the BG head is applied per slot with shared
-weights — so it bounds what a consumer may ask for, not what the graph computes. It
-is a training-time choice, not a released constant: read it from
+on the masked set. It sizes no weight — the BG head is applied per slot with
+shared weights — so it bounds what a consumer may ask for, not what the graph
+computes. It is a training-time choice, not a released constant: read it from
 `training_config['max_masked_patches']` and run each checkpoint at its own. A
 checkpoint that omits `training_config` loses it, and no tensor shape recovers it.
 
@@ -194,9 +189,9 @@ put an adapter between them; with no adapter the two paths agree, which is what 
 consumer checks at load. The `head` block carries the tensor order, the shapes and
 a sha256 over the exact bytes.
 
-`geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts (`T − PREDICTION_PATCHES`),
-which a shorter export lowers; `ARCH_MAX_CONTEXT_PATCHES` is the architecture's own
-ceiling.
+`geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts
+(`T − PREDICTION_PATCHES`), which a shorter export lowers;
+`ARCH_MAX_CONTEXT_PATCHES` is the architecture's own ceiling.
 
 The per-patch `step_basis` buffer **is** saved in the state dict; the per-span
 median basis is **not** — recompute it (§8.2).
@@ -225,8 +220,9 @@ q_tau, median = assemble_quantiles(head_raw, anchor_bg, mask_idx)   # §8
 1. `q, k, v = w_q/w_k/w_v(x)` (no bias), reshaped to `(B, N_HEADS, T, HEAD_DIM)`.
 2. **QK-norm**: per-head `RMSNorm(HEAD_DIM)` (`q_norm` / `k_norm`, eps 1e-6) on
    `q` and `k`, **before** RoPE.
-3. **RoPE** on `q` and `k` (base 1000; §3.4). Position enters through RoPE alone:
-   the block carries no additive distance or positional bias.
+3. **RoPE** on `q` and `k` (base 1000; §3.4).
+   Position enters through RoPE alone: the block carries no additive distance or
+   positional bias.
 4. **Mask**: the boolean mask of §4 (`True = attend`), consumed as it stands. A
    `(T, T)` mask broadcasts over batch and head; a per-sample `(B, T, T)` one must
    gain the head axis — `(B, 1, T, T)` — before use, or `B` aligns onto the head
@@ -292,9 +288,9 @@ attn  &= ~is_pad[:, :, None]    # a pad row reads nothing but itself
 attn[:, diag, diag] = True      # no all-False row, which would NaN the softmax
 ```
 
-The mask goes to attention as bool (§3.3); nothing additive is materialized.
-Nothing is memoized either — the masked set varies per sample and no cheap key
-identifies it.
+The mask goes to attention as bool (§3.3); nothing additive is materialized, and
+nothing is memoized — the masked set varies per sample and no cheap key identifies
+it.
 
 A masked span ending at patch `T−1` is a **forecast**, one starting at patch 0 a
 **backcast**, anything else an **infill**: one objective, not three modes. Two
@@ -305,8 +301,8 @@ causal triangulation among them, and future leak is prevented solely by the
 blocked visible→masked direction. The model accepts any `n_ctx` in
 `[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[168, 336]` patches (84–168 h).
 
-`create_attention_mask(n_ctx, P)` remains as a shim for the right-edge forecast:
-it builds that visible bool internally and returns the `(T, T)` mask.
+`create_attention_mask(n_ctx, P)` is a shim for the right-edge forecast: it builds
+that visible bool internally and returns the `(T, T)` mask.
 
 ---
 
@@ -322,26 +318,27 @@ f_inv(r) = exp( ( r/SCALE + OFFSET )^(1/POWER) )          # risk  -> mg/dL
 
 ### 5.1 Which parameterization, and where it comes from
 
-Two Kovatchev parameterizations coexist across the suite — a **model** space and
-a **clinical** space — and they are defined once, in `invariants.md` §4. Read it
-before touching either. Everything on the model path uses the model space; the
-clinical space never decodes a forecast.
+Two Kovatchev parameterizations coexist across the suite — a **model** space and a
+**clinical** space — defined once, in `invariants.md` §4. Read it before touching
+either. Everything on the model path uses the model space; the clinical space
+never decodes a forecast.
 
 The model constants are **a property of the checkpoint**, not of the domain, and
-therefore travel in the exported descriptor's `kovatchev` block: `SCALE`,
-`POWER`, `OFFSET`, `BG_CLAMP_MIN`, `BG_CLAMP_MAX`. Every (b)↔(c) crossing on the
-model path reads them from there — the BG input transform, the masked-patch anchors,
-and decoding `q_tau`/`median` back to mg/dL.
+travel in the exported descriptor's `kovatchev` block: `SCALE`, `POWER`, `OFFSET`,
+`BG_CLAMP_MIN`, `BG_CLAMP_MAX`. Every (b)↔(c) crossing on the model path reads
+them from there — the BG input transform, the masked-patch anchors, and decoding
+`q_tau`/`median` back to mg/dL.
 
 A checkpoint re-anchored to a different physical BG range ships different
 constants, and decoding one against the other fails silently: the output stays
-finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v4` is anchored on `[40, 400]` — `f(40) = −√10`,
-`f(400) = +√10` — while its clamp `[BG_CLAMP_MIN, BG_CLAMP_MAX]` is `[10, 400]`;
-the anchors are not the clamp. Against the superseded `risk-v2` constants a true
-55 mg/dL decodes as 32 and a true 300 as 394.
+finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v4`
+is anchored on `[40, 400]` — `f(40) = −√10`, `f(400) = +√10` — while its clamp
+`[BG_CLAMP_MIN, BG_CLAMP_MAX]` is `[10, 400]`; the anchors are not the clamp.
+Against the superseded `risk-v2` constants a true 55 mg/dL decodes as 32 and a
+true 300 as 394.
 
-A descriptor carrying no `kovatchev` block is therefore **rejected** rather than
-defaulted: there is no safe constant to fall back to.
+A descriptor carrying no `kovatchev` block is **rejected** rather than defaulted:
+there is no safe constant to fall back to.
 
 ### 5.2 Clamp guards
 
@@ -356,10 +353,10 @@ below mean *the acting parameterization's* bounds.
 - `f` on BG is applied inside `normalize` on physically-clamped mg/dL, so it is
   always well-defined.
 
-The physical bounds are plain numbers travelling in the descriptor — you do not
-need the simulator to run inference. They also set the rails
-`forecast_degeneracy_check` tests a pinned-flat median against, which is why that
-check takes the descriptor: given the wrong range it cannot fire at all.
+The physical bounds are plain numbers travelling in the descriptor — inference
+needs no simulator. They also set the rails `forecast_degeneracy_check` tests a
+pinned-flat median against, which is why that check takes the descriptor: given
+the wrong range it cannot fire at all.
 
 ---
 
@@ -381,9 +378,9 @@ statistics, no encoding.
 
 **Units.** BG in mg/dL; carb in **grams per 5-min step**; insulin in **units per
 5-min step**, with basal and bolus already **summed** into the single channel;
-exercise as a **carbohydrate-equivalent glucose disposal in grams per 5-min
-step** — the trained scale, never rescaled to an intensity. One timestep = 5 min;
-one patch = 6 steps = 30 min.
+exercise as a **carbohydrate-equivalent glucose disposal in grams per 5-min step**
+— the trained scale, never rescaled to an intensity. One timestep = 5 min; one
+patch = 6 steps = 30 min.
 
 **normalize (raw → z):**
 
@@ -428,7 +425,7 @@ bit (§7.3). The output-channel → input-feature map is
 → feat 2, exercise-channel 2 → feat 3). BG (feat 0) is never overrideable.
 
 **Patch flatten order is step-major:** `(PATCH_SIZE, N_INPUT_FEATURES) →
-PATCH_DIM` via a C-contiguous reshape, i.e.
+PATCH_DIM` via a C-contiguous reshape:
 
 ```
 flat_index = t · N_INPUT_FEATURES + feat        # t in [0, 6), feat in [0, 5)
@@ -444,11 +441,11 @@ the forecast target and the anchor. BG is clamped to the descriptor's
 `log1p` transform does this in `normalize`).
 
 A consumer may denoise its own BG channel before normalization — a live CGM feed
-is noisier than the simulator's — but that is an application decision outside
-this contract, and one that moves the anchor with it. Any filter must
-be **strictly causal**: reading `x[> t]` to estimate `x[t]` leaks the future into
-a forecast and invalidates every metric measured against it. A consumer that
-filters documents its own window and taps, in its own repository.
+is noisier than the simulator's — but that is an application decision outside this
+contract, and one that moves the anchor with it. Any filter must be **strictly
+causal**: reading `x[> t]` to estimate `x[t]` leaks the future into a forecast and
+invalidates every metric measured against it. A consumer that filters documents
+its own window and taps, in its own repository.
 
 ### 7.2 Building the context tensor
 
@@ -470,21 +467,21 @@ A masked patch withholds its BG and announces that it did:
 
 - **feat 0 (BG): 0** — it is what the model predicts.
 - **feat 4 (`bg_masked`): 1** in all `PATCH_SIZE` step-major columns of that
-  patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a
-  masked BG slot is an ordinary reading (≈142 mg/dL on the simulator pool), not a
+  patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a masked
+  BG slot is an ordinary reading (≈142 mg/dL on the simulator pool), not a
   sentinel — the masked set is announced, never inferred.
 - **feats 1–3 (carb / insulin / exercise): the announced plan.** A masked context
   patch keeps its observed values. A future patch takes the no-event baseline
   `normalize(0)` per channel. A literal `z = 0` routes through the sparse `log1p`
   inverse and announces a phantom ≈0.47 g of carbohydrate, ≈0.15 U of insulin and
   ≈0.025 g of exercise equivalent per step — `expm1` of each channel's fitted
-  mean, not the mean itself. Overwrite these slots with
-  **announced** future doses or sessions (normalized) to condition the forecast;
-  never write into them anything the patient did not announce.
+  mean, not the mean itself. Overwrite these slots with **announced** future doses
+  or sessions (normalized) to condition the forecast; never write into them
+  anything the patient did not announce.
 
-The `P = PREDICTION_PATCHES` future patches carry no observed BG at all, so all
-of them are masked. A masked set totals at most `MAX_MASKED_PATCHES` patches, and
-at least one patch of the window stays visible.
+The `P = PREDICTION_PATCHES` future patches carry no observed BG at all, so all of
+them are masked. A masked set totals at most `MAX_MASKED_PATCHES` patches, and at
+least one patch of the window stays visible.
 
 ### 7.4 The per-slot anchor
 
@@ -506,8 +503,7 @@ feat 0 is a legal-looking `z`. The forward asserts
 `anchor_bg ≥ BG_CLAMP_MIN − 1e-3` over all `M` slots (a units tripwire that
 catches a z-scored value routed in by mistake) and forms the risk anchor
 `f(anchor_bg)` internally. Padded slots must still carry a legal mg/dL value;
-their outputs are discarded by `valid`. No further filtering is applied to the
-context here.
+their outputs are discarded by `valid`.
 
 ---
 
@@ -516,16 +512,15 @@ context here.
 **Signature** (frozen):
 `forward(patches, attn_mask, anchor_bg, mask_idx, return_time=False) -> (q_tau, median)`.
 
-- `patches`: `(B, T, PATCH_DIM)`, `T ≤ MAX_SEQ_LEN` — a batch is left-padded to its
-  own longest window, so `T` varies and is never fixed at `MAX_SEQ_LEN`;
+- `patches`: `(B, T, PATCH_DIM)`, `T ≤ MAX_SEQ_LEN` — a batch is left-padded to
+  its own longest window, so `T` varies and is never fixed at `MAX_SEQ_LEN`;
   `attn_mask`: `(T, T)` or `(B, T, T)` bool (`True = attend`); `anchor_bg`:
   `(B, M)` mg/dL (§7.4); `mask_idx`: `(B, M)` int64, the patch index each of the
   `M` head slots reads.
 - `q_tau`: `(B, M, PATCH_SIZE, 7)` in **risk space**, ascending τ.
 - `median`: `(B, M, PATCH_SIZE)` in risk space (`== q_tau[..., 3]`).
-- `return_time=True` additionally returns the diagnostic hour-of-day probe
-  logits, one per slot; they never affect `q_tau`/`median`, so ignore them for BG
-  inference.
+- `return_time=True` additionally returns the diagnostic hour-of-day probe logits,
+  one per slot; they never affect `q_tau`/`median`.
 
 A masked set smaller than `M` pads the surplus slots, which gather patch 0 and
 carry a legal anchor; a `(B, M)` `valid` bool marks them and the decode drops
@@ -539,8 +534,8 @@ index `3`.
 ### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, carry_spread=0.0)`
 
 `head_raw` is `(B, M, S, 7)`: column 0 = median delta; columns 1..3 = the τ>.5
-spreads (nearest→far, .75/.9/.95); columns 4..6 = the τ<.5 spreads
-(nearest→far, .25/.1/.05).
+spreads (nearest→far, .75/.9/.95); columns 4..6 = the τ<.5 spreads (nearest→far,
+.25/.1/.05).
 
 `mask_idx` groups the `M` slots into contiguous **spans**, and the median runs per
 span: nothing accumulates or low-passes across the visible patches between two
@@ -568,17 +563,18 @@ q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) asce
 
 The median is a projection of the raw per-patch deltas onto a `G_L`-dimensional
 low-frequency DCT subspace over the span, so it cannot drift; at initialization
-(`delta ≈ 0`) it is `≈ anchor` — a flat persistence forecast. It is band-limited,
+(`delta ≈ 0`) it is `≈ anchor`, a flat persistence forecast. It is band-limited,
 not smooth: the shortest period it can represent is `2 n / (G_L − 1)` steps —
-`6.86` steps, 34 min, at the 2 h forecast — and oscillation slower than that
-passes through unattenuated. A fixed `G` in place of `G_L` is the identity at
-`L = 1` and stops contracting. The `cumsum` of strictly-positive spreads
-guarantees a monotone ascending fan around the median.
+`6.86` steps, 34 min, at the 2 h forecast — and oscillation slower than that passes
+through unattenuated. A fixed `G` in place of `G_L` is the identity at `L = 1` and
+stops contracting. The `cumsum` of strictly-positive spreads guarantees a monotone
+ascending fan around the median.
+
 `carry_spread` is **per level**, in `head_raw[..., 1:]`'s own layout —
 `[.75 .9 .95 | .25 .1 .05]`, six risk-space offsets — and defaults to `0` (only
-rolling inflation uses a non-zero value, §9). A scalar broadcasts to all six and
-is a defect anywhere the six differ: it re-seeds every level from the outermost
-one's accumulation, and the fan stops being a fan.
+rolling inflation uses a non-zero value, §9). A scalar broadcasts to all six and is
+a defect anywhere the six differ: it re-seeds every level from the outermost one's
+accumulation, and the fan stops being a fan.
 
 The carry composes with the span's own spread **in quadrature**, not by addition:
 the two are increments of different rolls, and independent increments add
@@ -596,13 +592,14 @@ B[s, j] = cos( π (s + 0.5) j / n )     for s in [0, n), j in [0, G)
 then normalize each column to unit L2 norm.
 ```
 
-`G` is `min(G_L, n)`, the span-scaled dimension of [§3.1](#31-recovering-dimensions).
-The cut-off period `2 n / (G_L − 1)` varies with `L` — `60 / 40 / 36 / 34` min at
-`L = 1 / 2 / 3 / 4` — so report it per span length rather than as one figure.
-What `G_L` holds constant is `K` columns per patch.
-This basis is **not** saved in the checkpoint — recompute it, once per span
-length. (The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 2)`, **is**
-saved; read it from the state dict or recompute the same way over `n = 6`.)
+`G` is `min(G_L, n)`, the span-scaled dimension of
+[§3.1](#31-recovering-dimensions). The cut-off period `2 n / (G_L − 1)` varies with
+`L` — `60 / 40 / 36 / 34` min at `L = 1 / 2 / 3 / 4` — so report it per span length
+rather than as one figure. What `G_L` holds constant is `K` columns per patch.
+
+This basis is **not** saved in the checkpoint — recompute it, once per span length.
+The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 2)`, **is** saved; read
+it from the state dict or recompute the same way over `n = 6`.
 
 ### 8.3 Decoding to mg/dL
 
@@ -620,7 +617,7 @@ clamped into `[BG_CLAMP_MIN, BG_CLAMP_MAX]` by `f_inv`.
 
 A band correction `delta` is additive mg/dL per `(step, τ)`, applied downstream of
 `f_inv`. It may be carried by the checkpoint (`ckpt['conformal_delta']`) or fitted
-by the consumer; either way the same rules govern it.
+by the consumer; the same rules govern it either way.
 
 **The apply.** `apply_quantile_conformal(bands, delta, median_idx=3)` takes one
 **two-dimensional** delta, shaped like the fan's own trailing `(step, τ)` axes —
@@ -632,9 +629,9 @@ other rank is rejected, never broadcast.
 
 **The fit.** Split conformal on a held-out calibration set of matured
 `(forecast, realized)` pairs. Per `(step, τ)` the residuals are
-`realized − band[step, τ]`; `delta[step, τ]` is the empirical `τ`-quantile of
-those residuals, taken as the **side-aware** 1-indexed order statistic over the
-`n` sorted residuals:
+`realized − band[step, τ]`; `delta[step, τ]` is the empirical `τ`-quantile of those
+residuals, taken as the **side-aware** 1-indexed order statistic over the `n`
+sorted residuals:
 
 ```
 idx(n, τ) = floor((n+1)·τ)   for τ < 0.5      # a LOWER edge
@@ -643,68 +640,65 @@ idx(n, τ) = floor((n+1)·τ)   for τ < 0.5      # a LOWER edge
 
 clamped into `[1, n]`; the median column is skipped. The two sides round opposite
 ways: `ceil` on a lower edge sits that edge one order statistic too high and lets
-realized BG escape below it more often than the nominal rate — anti-conservative
-on exactly the hypo edge, and worst at small `n`. Below the `n` at which every
-level resolves without clamping (**19** for the seven levels of
-`invariants.md` §6) the extreme levels' offsets are simply the minimum and the
-maximum of the residual sample, and the coverage they claim is arithmetic that
-never ran.
+realized BG escape below it more often than the nominal rate — anti-conservative on
+exactly the hypo edge, and worst at small `n`. Below the `n` at which every level
+resolves without clamping (**19** for the seven levels of `invariants.md` §6) the
+extreme levels' offsets are simply the minimum and the maximum of the residual
+sample, and the coverage they claim is arithmetic that never ran.
 
 **The region bins.** A fit is either **marginal** — one delta over the whole
-calibration set — or **region-binned** (Mondrian): the same fit run once per bin
-on that bin's own rows, stacked to `(n_bins, P·S, 7)`. The region is a property of
-the whole window, read off where its forecast is heading: the mean of the median
-line over the final patch of the horizon. An apply holds the median fixed, so a
-window's region is the same before and after correction and no second pass is
-needed. The one edge is at 110 mg/dL, inside the euglycaemic band; an edge at a
-clinical threshold splits the windows that decide an alarm across two separately
-fitted corrections. A bin holding fewer than **39** calibration windows — the `n`
-below which its own τ.05 offset is the calibration-sample minimum — takes the
-marginal delta instead. A stack travels with a meta carrying `layout`,
-`region_edges`, `region_variable` and the per-bin fallback record; without them a
-consumer cannot reconstruct the bin.
+calibration set — or **region-binned** (Mondrian): the same fit run once per bin on
+that bin's own rows, stacked to `(n_bins, P·S, 7)`. The region is a property of the
+whole window, read off where its forecast is heading: the mean of the median line
+over the final patch of the horizon. An apply holds the median fixed, so a window's
+region is the same before and after correction. The one edge is at 110 mg/dL,
+inside the euglycaemic band; an edge at a clinical threshold would split the windows
+that decide an alarm across two separately fitted corrections. A bin holding fewer
+than **39** calibration windows — the `n` below which its own τ.05 offset is the
+calibration-sample minimum — takes the marginal delta instead. A stack travels with
+a meta carrying `layout`, `region_edges`, `region_variable` and the per-bin fallback
+record; without them a consumer cannot reconstruct the bin.
 
 **Applying a stack.** Group the windows by bin and call the apply once per group
 with that bin's `(P·S, 7)` slice. A per-window delta is never gathered.
 
 **One protocol per delta.** A delta is fit and applied within one masked-set
-protocol. A forecast fit is the one that ships; an infill fit is stored apart
-under `shipped = false` and never merged into a shipped band — its slots are
-bracketed by visible evidence on both sides, so its residuals are not
-exchangeable with a forecast's.
+protocol. A forecast fit is the one that ships; an infill fit is stored apart under
+`shipped = false` and never merged into a shipped band — its slots are bracketed by
+visible evidence on both sides, so its residuals are not exchangeable with a
+forecast's.
 
-Validity rests on **exchangeability** between the calibration set and the
-forecasts the delta is later applied to. Two consequences follow and are not
-optional: the split is **chronological** (older fitted on, newer held out and
-scored), and the held-out τ.05–.95 coverage is **reported beside the mean band
-width**, per `invariants.md` §6.2 — a band widened until it swallows every truth
-covers perfectly and forecasts nothing.
+Validity rests on **exchangeability** between the calibration set and the forecasts
+the delta is later applied to. Two consequences are not optional: the split is
+**chronological** (older fitted on, newer held out and scored), and the held-out
+τ.05–.95 coverage is **reported beside the mean band width**, per `invariants.md`
+§6.2 — a band widened until it swallows every truth covers perfectly and forecasts
+nothing.
 
 **Where each fit lives.** A checkpoint-carried delta is fit on the **simulator**
 distribution; for real-world CGM it must be re-fit per cohort or omitted, and the
 export path ships none. Off device, `T1DMAI/conformal.py` fits and applies one
 delta and `T1DMAI/mondrian.py` bins it into a stack. On device, `T1DMDROID` fits a
 **marginal** per-patient delta from the patient's own matured forecasts — one
-`(step, τ)` correction, no region axis — and applies it to **display only**: the
-raw fan is what the alarm engine, the dose calculator, the accuracy suite, the
+`(step, τ)` correction, no region axis — and applies it to **display only**: the raw
+fan is what the alarm engine, the dose calculator, the accuracy suite, the
 `prediction` table and the wire all carry. Both implementations are bound by the
 order-statistic rule above, and because both publish τ.05–.95 coverage under one
 name, neither may change it alone.
 
 **Corrective versus constitutive.** The delta above *corrects* a fan the model
-already emitted, which is why it is display-only. The same fit and apply also give
-a band to a forecaster that has none — `T1DMDROID`'s classical baseline starts
-from a degenerate fan whose seven levels are all the median, and its residual
-quantiles become its interval. `invariants.md` §6.2's degenerate-band property
-makes that exact: a collapsed fan projects to its own point forecast, so the apply
-opens it without moving anything.
+already emitted, which is why it is display-only. The same fit and apply also give a
+band to a forecaster that has none — `T1DMDROID`'s classical baseline starts from a
+degenerate fan whose seven levels are all the median, and its residual quantiles
+become its interval. `invariants.md` §6.2's degenerate-band property makes that
+exact: a collapsed fan projects to its own point forecast, so the apply opens it
+without moving anything.
 
 The two differ in what a consumer may do with the result. A corrective delta is
 fitted after the model, stored apart from it, and skippable, so a raw and a
 calibrated fan both exist and only the raw one may be classified on, stored, or
-sent. A constitutive one is fitted with the model and travels inside it, so one
-fan exists and it is stored and sent like any other output. Neither may move a
-median.
+sent. A constitutive one is fitted with the model and travels inside it, so one fan
+exists and it is stored and sent like any other output. Neither may move a median.
 
 ---
 
@@ -735,9 +729,9 @@ roll —
 
 1. Run steps 4–8 → a risk-space `median`.
 2. Re-feed: `median → f_inv → mg/dL → normalize → BG feat-0 slot` of the new
-   context patches, clearing feat 4 — those patches are visible now. Carb,
-   insulin and exercise come from the caller's announced schedule for that roll,
-   else the `normalize(0)` no-event baseline.
+   context patches, clearing feat 4 — those patches are visible now. Carb, insulin
+   and exercise come from the caller's announced schedule for that roll, else the
+   `normalize(0)` no-event baseline.
 3. Slide the context forward, dropping the oldest patches once it exceeds
    `MAX_CONTEXT_PATCHES`. BG anchors at the last forecast BG carried across rolls.
 4. To keep the band fan from resetting at each roll seam, carry the terminal-step
@@ -760,8 +754,6 @@ masked set as `mask_spans` and defaults it to the trailing forecast.
 
 ## 10. Minimal PyTorch example
 
-Using the shipped helpers (the simplest path — no reimplementation):
-
 ```python
 import numpy as np, torch
 from model import T1DMAI
@@ -779,8 +771,6 @@ model.load_state_dict(merged, strict=False)
 model.eval()
 
 # 2. Build a normalized context from a raw history.
-#    Here: n_ctx patches of BG (mg/dL), carb (g/step), insulin (U/step),
-#    exercise (carb-equivalent g/step).
 n_ctx = MIN_CONTEXT_PATCHES
 n_ch  = len(CHANNEL_NAMES)                          # 4 normalized channels
 raw   = np.zeros((n_ctx * PATCH_SIZE, n_ch), dtype=np.float32)
@@ -839,8 +829,8 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | position encoding | RoPE only; no additive distance bias |
 | SDPA scaling | `1/sqrt(HEAD_DIM)` |
 
-The per-channel `mean` / `std` come from `ckpt['normalization_stats']` (BG in
-risk space, carb/insulin/exercise in log1p space).
+The per-channel `mean` / `std` come from `ckpt['normalization_stats']` (BG in risk
+space, carb/insulin/exercise in log1p space).
 
 ---
 
@@ -853,16 +843,16 @@ risk space, carb/insulin/exercise in log1p space).
   bool mask. Export with a math-fallback SDPA, or hand-roll
   `softmax(QKᵀ/sqrt(HEAD_DIM) + mask) @ V` with `-inf` at the blocked positions.
   RoPE, RMSNorm and SwiGLU are all elementwise or matmul.
-- **What a non-PyTorch runtime reimplements outside the exported graph** (all
-  pure numeric): per-channel `normalize` / `denormalize`; `kovatchev_f` /
+- **What a non-PyTorch runtime reimplements outside the exported graph** (all pure
+  numeric): per-channel `normalize` / `denormalize`; `kovatchev_f` /
   `kovatchev_f_inv` with their clamp guards; the per-slot anchor; the step-major
   patch flatten; the masked-patch fill (feat 0 zeroed, feat 4 set, the maskable
   feats at `normalize(0)` or the announced plan); the bool attention mask;
   `assemble_quantiles` (softplus, cumsum, per-span DCT projection); and the
   optional conformal apply.
 - **Watch the `bg_masked` bit.** Nothing else writes feat 4, so a builder that
-  forgets it announces every masked patch as an observation, with every shape
-  still matching and every fan still monotone.
-- **Keep the decode constants exact.** `ROPE_BASE`, the median mode/basis, and
-  the quantile floor are not stored in the checkpoint; a released model is locked
-  to the values in §11.
+  forgets it announces every masked patch as an observation, with every shape still
+  matching and every fan still monotone.
+- **Keep the decode constants exact.** `ROPE_BASE`, the median mode/basis, and the
+  quantile floor are not stored in the checkpoint; a released model is locked to
+  the values in §11.

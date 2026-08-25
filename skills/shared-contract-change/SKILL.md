@@ -14,92 +14,84 @@ description: >-
 # Changing something the suite shares
 
 A change is a **shared-contract change** if a second repository would have to
-change too for the suite to stay coherent. Those changes fail differently from
-ordinary ones: nothing errors, both sides keep transacting, and a number quietly
-means something else.
+change too for the suite to stay coherent. Those fail differently: nothing
+errors, both sides keep transacting, and a number quietly means something else.
 
-Work the protocol below in order. Do not begin editing until step 2.
+Work in order. Do not edit until step 2.
 
-## 1. Establish what you are actually changing
+## 1. Establish what is actually changing
 
-Read `SPEC/invariants.md` for the concept you are touching, then find **every**
-implementation of it. Do not assume there are two. The Kovatchev transform was
-found in six places across three repositories and three languages.
+Read `SPEC/invariants.md` for the concept, then find **every** implementation of
+it. Do not assume there are two — the Kovatchev transform was found in six
+places across three repositories and three languages.
 
-Search all four sibling checkouts, not only the one you are working in:
+Search all four sibling checkouts:
 
 ```
 rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID ../T1DMSERVER
 ```
 
-List what you found before proceeding. If the count surprises you, that is the
-finding — report it.
+List what was found before proceeding. A surprising count is itself the finding;
+report it.
 
 ## 2. Change the specification first
 
 If `SPEC/` states the rule, amend it there before touching any implementation.
-If `SPEC/` does not state it yet, add it. The spec is the artefact the next agent
-will read; an implementation change that leaves it stale has moved the drift
-rather than fixed it.
+If `SPEC/` does not state it yet, add it. An implementation change that leaves
+the spec stale has moved the drift rather than fixed it.
 
-The three specifications — `invariants.md`, `http-api.md`, `inference.md` — are
-**single-copy**. Amend the original; never bring a copy back into a project, and
-never "helpfully" paste the changed section into the consumer's documentation.
-A project's `docs/` entry is a stub naming the specification and carrying only
-what is local to that project. `scripts/check-no-copies.sh` enforces this.
+`invariants.md`, `http-api.md` and `inference.md` are **single-copy**. Amend the
+original; never bring a copy back into a project, and never paste a changed
+section into a consumer's documentation. A project's `docs/` entry is a stub
+naming the specification and carrying only what is local to that project.
+`scripts/check-no-copies.sh` enforces this.
 
-If the change alters the wire contract between `T1DMDROID` and `T1DMSERVER`,
-bump `CONTRACT_VERSION` and say what changed.
+A change to the wire contract between `T1DMDROID` and `T1DMSERVER` bumps
+`CONTRACT_VERSION` in the same commit and says what changed.
 
-`SPEC/` is not the only thing your change can falsify. Sweep the rest of
-`T1DMCOMMON` in the same pass: a `PROJECTS/` entry your change outdates, a known
-deviation it resolves, an open question it answers. Resolved entries are
-**deleted**, not annotated — these files state what is true now, and the commit
-that fixed a defect is where that defect's history belongs. See *Keeping this
-repository true* in `CLAUDE.md`.
+Sweep the rest of `T1DMCOMMON` in the same pass: a `PROJECTS/` entry the change
+outdates, a known deviation it resolves, an open question it answers. Resolved
+entries are **deleted**, not annotated. See *Keeping this repository true* in
+`CLAUDE.md`.
 
 ## 3. Change the implementations you were asked to change
 
 Write only to the repository you were asked to work in. For every other
-repository that needs a corresponding change, **report it — do not reach in**.
-A cross-repository edit is a separate, explicit task.
+repository needing a corresponding change, **report it — do not reach in**.
 
-Consistency within your own repository is not optional: applying a unit or scale
+Consistency within one repository is not optional: applying a unit or scale
 change at one call site and not the others is worse than not applying it, because
 the two halves then disagree inside a single program.
 
-## 4. Prove it, do not assert it
+## 4. Prove it
 
-A test that pins a **number** is worth more than one that pins a shape. If you
-changed a convention, add a case that fails against the old behaviour, and check
-that it does — run it against the unmodified code before you trust it.
+A test that pins a **number** is worth more than one that pins a shape. If a
+convention changed, add a case that fails against the old behaviour, and run it
+against the unmodified code to confirm it does.
 
-Where both sides ship golden vectors for the same concept, compare them directly.
-Two files named `curve_golden.json` in two repositories are either identical in
-the scenarios they share or they are evidence of drift.
+Where both sides ship golden vectors for one concept, compare them directly. Two
+files named `curve_golden.json` in two repositories are either identical in the
+scenarios they share or they are evidence of drift.
 
-Then run the copy check, which is a second's work and catches the failure mode
-this whole protocol exists to prevent:
+Then:
 
 ```
 scripts/check-no-copies.sh
+scripts/check-contract.sh
 ```
 
 ## 5. Report the seams you could not close
 
 End with an explicit list: which repositories still need the corresponding
-change, which call sites you could not reach, which of this document's open
-questions your change depends on, and anything in `T1DMCOMMON` your change has
-left stale that you could not amend yourself — named by file and by claim.
-Silence here is how the next divergence starts.
+change, which call sites were unreachable, which open questions the change
+depends on, and anything in `T1DMCOMMON` left stale — named by file and by claim.
 
 ## What does not need this skill
 
 Local refactors, UI text, logging, comments, build configuration, and anything
 whose effect stops at the edge of one repository. When in doubt, ask whether a
-second repository would have to change too. If not, proceed normally.
+second repository would have to change too.
 
-One thing still applies to those changes: if a purely local change happens to
-falsify something written in `T1DMCOMMON` — a project's gates, its module map,
-which backends it runs — that correction is owed regardless. Skipping this skill
-is not a licence to leave the specification wrong.
+One thing still applies: a purely local change that falsifies something written
+in `T1DMCOMMON` — a project's gates, its module map, which backends it runs —
+owes that correction regardless.
