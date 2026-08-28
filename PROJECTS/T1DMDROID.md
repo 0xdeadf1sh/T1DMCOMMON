@@ -86,12 +86,15 @@ nothing measured before it, a slot already holding a measurement, and a
 degenerate band. Demotion takes it back out, across every sensor the span may
 have been filed under.
 
-**The head is re-runnable, and that is the adapter seam.** The graph emits the
-trunk's hidden state per slot and the export ships the head's weights beside the
-artifact, so the app reproduces `head_raw` outside the graph and can put a
-low-rank adapter in front of it. The trunk stays frozen inside the `.pte`; a fit
-is a few thousand numbers trained from the patient's own matured windows. A head
-that does not reproduce the graph's own output is refused.
+**The head is re-runnable, and that is the adapter seam.** The graph emits
+`hidden`, the trunk's state for every patch, and the export ships the head's
+weights beside the artifact. The app gathers each span's nodes out of `hidden`,
+builds the step states by the spline of `../SPEC/inference.md` §8.2, and runs the
+head's MLP on them, so it reproduces `head_raw` outside the graph and can put a
+low-rank adapter on the node states, ahead of the spline. The trunk stays frozen
+inside the `.pte`; a fit is a few thousand numbers trained from the patient's own
+matured windows. A head that does not reproduce the graph's own output is
+refused.
 
 **An adapter is refused at attach unless it has been measured against the model's
 own dose response.** A few thousand parameters fitted to one patient's weeks can

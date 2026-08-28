@@ -46,7 +46,7 @@ Every tensor lives in exactly one of three spaces
 Patch flatten order is step-major
 Position enters through RoPE alone
 the masked set is announced, never inferred
-builds DCT-II cosine modes over a span of
+Every node sits at its patch centre
 EOF
 cat >"$PATDIR/invariants" <<'EOF'
 on one side and an **amount** on the other

@@ -5,9 +5,9 @@ the ExecuTorch artifact plus the descriptor `T1DMDROID` loads. Python. MIT.
 
 Passive tooling — run by hand when a new model is wanted.
 
-## The risk-v4 architecture
+## The risk-v5 architecture
 
-What `ARCH_VERSION = 'risk-v4'` carries that matters across the suite:
+What `ARCH_VERSION = 'risk-v5'` carries that matters across the suite:
 
 **No input or target smoothing.** The causal Savitzky-Golay smoother was deleted.
 Inputs, the forecast target and the anchor are the raw post-noise simulator
@@ -35,6 +35,16 @@ inferable from position, and each masked patch carries its own one-sided,
 left-preferring anchor in place of one broadcast `last_bg`.
 `../SPEC/inference.md` holds the feature map, the patch geometry, the forward
 signature and the head's slot layout.
+
+**The glucose head decodes a continuous step state.** A masked span's nodes are
+its own masked patches plus the visible neighbour on each side, where the span may
+read one under the attention mask, all sited at patch centres. A uniform cubic
+B-spline over those node states gives every 5-minute step its own `D_MODEL`
+vector, and one shared 3-layer MLP maps that vector to the median delta and the
+six spreads; the median is the slot's anchor plus the delta. The head takes no
+position input, and nothing about the spline is stored in the checkpoint. The DILATE
+shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
+node rule, the coordinate and the weights.
 
 **Configured capacity is medium** — `D_MODEL` 128, `N_LAYERS` 8, `N_HEADS` 8, set
 through `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see

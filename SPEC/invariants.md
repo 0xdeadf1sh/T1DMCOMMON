@@ -145,7 +145,7 @@ do not simplify it to a zero.
 The same family, **re-anchored for the network**. The model's input and output BG
 both live here.
 
-The current anchoring (`ARCH_VERSION = risk-v4`) is solved so that `f(40) = -√10`
+The current anchoring (`ARCH_VERSION = risk-v5`) is solved so that `f(40) = -√10`
 and `f(400) = +√10` — risk 100 at both rails:
 
 ```

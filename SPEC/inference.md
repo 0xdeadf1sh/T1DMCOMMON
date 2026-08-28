@@ -86,7 +86,7 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 
 | key | contents | needed for inference? |
 |---|---|---|
-| `arch_version` | e.g. `'risk-v4'` | provenance |
+| `arch_version` | e.g. `'risk-v5'` | provenance |
 | `loss_schema` | e.g. `'kendall-pinball-dilate-v3'` | provenance |
 | `step` | training step | provenance |
 | `model_state_dict` | live weights | base weights |
@@ -141,36 +141,22 @@ globals from the checkpoint and instantiate.
 | `N_HEADS` | attention heads | `n_heads` | `D_MODEL / HEAD_DIM` |
 | `HEAD_DIM` | `= D_MODEL // N_HEADS` | derive | `blocks.0.attn.q_norm.weight` length |
 | `FFN_DIM` | SwiGLU inner width | `ffn_dim` | `blocks.0.ffn.w1.weight` rows |
-| `PATCH_SIZE` | steps per patch = 6 | `patch_size` | `step_basis` rows |
+| `PATCH_SIZE` | steps per patch = 6 | `patch_size` | `patch_embed.weight` cols `/ 5` |
 | `N_INPUT_FEATURES` | 5 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
 | `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 30 | derive | `patch_embed.weight` cols |
 | `PREDICTION_PATCHES` | horizon patches | `prediction_patches` | — |
 | `MIN/MAX_CONTEXT_PATCHES` | 168 / 336 | `min/max_context_patches` | — |
 | `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
 | `BG_HEAD_HIDDEN` | head MLP width | — | `bg_head.0.weight` rows |
-| `BG_HEAD_STEP_BASIS_DIM` (K) | within-patch coeffs = 2 | — | `step_basis` cols |
-| `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= K·(1+2·N_SPREADS)` |
+| `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= 1 + 2·N_SPREADS` |
 
 A few decode-critical constants are **not** stored anywhere and are fixed released
 defaults — reproduce them exactly: `ROPE_BASE = 1000`, RMSNorm `eps = 1e-6`,
 `QUANTILE_LEVELS = (.05, .1, .25, .5, .75, .9, .95)`,
-`BG_QUANTILE_SPREAD_MIN = 1e-3`, `BG_HEAD_MEDIAN_MODE = 'global'`,
-`BG_HEAD_MEDIAN_GLOBAL_DIM = 8`, `BG_HEAD_STEP_BASIS_TYPE = 'dct'`, and the
-Kovatchev constants (§5).
-
-`BG_HEAD_MEDIAN_GLOBAL_DIM` is the median-basis dimension at a span of
-`PREDICTION_PATCHES` patches. Each span of `L` patches uses
-`G_L = max(1, ceil(BG_HEAD_MEDIAN_GLOBAL_DIM · L / PREDICTION_PATCHES))` columns —
-`2 / 4 / 6 / 8` at `L = 1 / 2 / 3 / 4`.
-
-`BG_HEAD_MEDIAN_GLOBAL_DIM = PREDICTION_PATCHES · K`, so `G_L = K · L` at every
-span length: the head emits `L · K` median coefficients per span and the basis
-keeps all of them. A pair that breaks this relation gives the projection a null
-space, and whatever the head emits into it is discarded by the decode and takes no
-gradient from any loss.
+`BG_QUANTILE_SPREAD_MIN = 1e-3`, and the Kovatchev constants (§5).
 
 `MAX_MASKED_PATCHES` (`M`) is the head's slot count and the training sampler's cap
-on the masked set. It sizes no weight — the BG head is applied per slot with
+on the masked set. It sizes no weight — the BG head is applied per step with
 shared weights — so it bounds what a consumer may ask for, not what the graph
 computes. It is a training-time choice, not a released constant: read it from
 `training_config['max_masked_patches']` and run each checkpoint at its own. A
@@ -182,19 +168,22 @@ exported graph is sized by it: the masked set crosses as a `(M, T)` one-hot
 rows repeat patch 0 and their outputs are discarded. A selection matmul, not a
 gather — no int64 tensor crosses the runtime boundary.
 
-The graph emits `slot_hidden` `(B, M, D_MODEL)`, the final-normed hidden state per
-slot, and the export writes `bg_head`'s weights beside the artifact as the flat
-fp32 file `head.file` names. A consumer reproduces `head_raw` from the two, and may
-put an adapter between them; with no adapter the two paths agree, which is what a
-consumer checks at load. The `head` block carries the tensor order, the shapes and
-a sha256 over the exact bytes.
+The graph emits `hidden` `(B, T, D_MODEL)`, the final-normed hidden state of every
+patch, and the export writes `bg_head`'s weights beside the artifact as the flat
+fp32 file `head.file` names. A consumer gathers each span's nodes out of `hidden` —
+the patches `slot_sel` names, plus the visible neighbour on each side under the
+rule of [§8.2](#82-the-step-state-spline) — forms the step states and runs the head
+file's MLP on each of them to reproduce `head_raw`. An adapter may act on the node
+states, ahead of the spline; with no adapter the two paths agree, which is what a
+consumer checks at load. The `head` block carries the tensor order, the shapes, a
+sha256 over the exact bytes, and `decoder = "bspline-centre-nodes"` — the name of
+the rule in [§8.2](#82-the-step-state-spline); a consumer rejects a value it does
+not implement rather than assuming this one. A sidecar synced without the `head`
+block decodes `head_raw` alone and needs no decoder name.
 
 `geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts
 (`T − PREDICTION_PATCHES`), which a shorter export lowers;
 `ARCH_MAX_CONTEXT_PATCHES` is the architecture's own ceiling.
-
-The per-patch `step_basis` buffer **is** saved in the state dict; the per-span
-median basis is **not** — recompute it (§8.2).
 
 ### 3.2 Block structure (pre-norm, 2 residual writes per block)
 
@@ -204,14 +193,13 @@ for block in blocks:
     x = x + attn(norm1(x))                    # RMSNorm -> TemporalSelfAttention
     x = x + ffn (norm2(x))                    # RMSNorm -> SwiGLU
 x = final_norm(x)                             # RMSNorm
-pred     = x.gather(1, mask_idx)              # (B, M, D_MODEL) — the masked patches
-coeff    = bg_head(pred).view(B, M, K, 1 + 2*N_SPREADS)
-head_raw = einsum('sk,bmkc->bmsc', step_basis, coeff)   # (B, M, PATCH_SIZE, 7)
+H        = step_states(x, mask_idx, attn_mask)   # (B, M, PATCH_SIZE, D_MODEL) — §8.2
+head_raw = bg_head(H)                            # (B, M, PATCH_SIZE, 7)
 q_tau, median = assemble_quantiles(head_raw, anchor_bg, mask_idx)   # §8
 ```
 
-- The head reads the masked patches **by index**, never as a trailing slice: the
-  masked set may sit anywhere in the sequence (§4).
+- `step_states` reads the masked patches **by index**, never as a trailing slice:
+  the masked set may sit anywhere in the sequence (§4).
 - **RMSNorm** (no mean subtraction, no bias): `x / sqrt(mean(x², dim=-1) + eps) *
   weight`, `eps = 1e-6`, learned per-channel `weight` (init 1).
 
@@ -233,8 +221,7 @@ q_tau, median = assemble_quantiles(head_raw, anchor_bg, mask_idx)   # §8
    `1/sqrt(HEAD_DIM)` scaling is the only thing a reimplementation must reproduce.
 6. `out = w_o(concat_heads)`.
 
-A state dict carrying `blocks.*.attn.alibi_slopes` predates `risk-v4` and does not
-load into this graph.
+A state dict carrying `blocks.*.attn.alibi_slopes` does not load into this graph.
 
 ### 3.4 RoPE cache (`build_rope_cache(T, HEAD_DIM, base=1000)`)
 
@@ -295,8 +282,8 @@ it.
 A masked span ending at patch `T−1` is a **forecast**, one starting at patch 0 a
 **backcast**, anything else an **infill**: one objective, not three modes. Two
 spans never abut — one visible patch separates neighbours, and that separator is
-what makes the anchor (§7.4), the median basis (§8.2) and the span grouping well
-defined. The masked patches are decoded **jointly** in one forward pass, with no
+what makes the anchor (§7.4), the spline's node sequence (§8.2) and the span
+grouping well defined. The masked patches are decoded **jointly** in one forward pass, with no
 causal triangulation among them, and future leak is prevented solely by the
 blocked visible→masked direction. The model accepts any `n_ctx` in
 `[MIN_CONTEXT_PATCHES, MAX_CONTEXT_PATCHES]` = `[168, 336]` patches (84–168 h).
@@ -331,7 +318,7 @@ them from there — the BG input transform, the masked-patch anchors, and decodi
 
 A checkpoint re-anchored to a different physical BG range ships different
 constants, and decoding one against the other fails silently: the output stays
-finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v4`
+finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v5`
 is anchored on `[40, 400]` — `f(40) = −√10`, `f(400) = +√10` — while its clamp
 `[BG_CLAMP_MIN, BG_CLAMP_MAX]` is `[10, 400]`; the anchors are not the clamp.
 Against the superseded `risk-v2` constants a true 55 mg/dL decodes as 32 and a
@@ -531,26 +518,24 @@ objective admits.
 `QUANTILE_LEVELS = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)`, median column
 index `3`.
 
-### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, carry_spread=0.0)`
+### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, valid=None, carry_spread=0.0)`
 
 `head_raw` is `(B, M, S, 7)`: column 0 = median delta; columns 1..3 = the τ>.5
 spreads (nearest→far, .75/.9/.95); columns 4..6 = the τ<.5 spreads (nearest→far,
 .25/.1/.05).
 
-`mask_idx` groups the `M` slots into contiguous **spans**, and the median runs per
-span: nothing accumulates or low-passes across the visible patches between two
-spans.
+The assembly is pointwise per `(slot, step)`: it groups nothing and low-passes
+nothing. Spans enter the decode one stage earlier, in the step-state spline
+([§8.2](#82-the-step-state-spline)).
 
 ```
 anchor = f( clamp(anchor_bg, BG_CLAMP_MIN, BG_CLAMP_MAX) )  # (B, M), risk; flat over S
 delta  = head_raw[..., 0]                                   # (B, M, S)
 
-# --- median (mode = 'global', the released default), per span of L patches ---
-delta_flat = delta[span].reshape(B, L*S)    # C-contiguous, PATCH-MAJOR: flat = p*S + s
-Bg         = global_median_basis(n=L*S, G=G_L, kind='dct')  # (L*S, G_L) orthonormal cols
-m          = anchor + (delta_flat @ Bg @ Bgᵀ).reshape(B, L, S)   # low-freq DCT projection
+# --- median ---
+m = anchor[..., None] + delta                               # (B, M, S)
 
-# --- spreads (identical under every median mode) ---
+# --- spreads ---
 spread = softplus(head_raw[..., 1:]) + 1e-3              # strict positive floor
 d_up   = spread[..., :3]                                 # .75/.9/.95
 d_dn   = spread[..., 3:]                                 # .25/.1/.05
@@ -561,14 +546,11 @@ dn = m[..., None] − hypot(c_dn, cumsum(d_dn, dim=-1))     # descending in valu
 q_tau = concat([ flip(dn, -1), m[..., None], up ], dim=-1)   # (B, M, S, 7) ascending τ
 ```
 
-The median is a projection of the raw per-patch deltas onto a `G_L`-dimensional
-low-frequency DCT subspace over the span, so it cannot drift; at initialization
-(`delta ≈ 0`) it is `≈ anchor`, a flat persistence forecast. It is band-limited,
-not smooth: the shortest period it can represent is `2 n / (G_L − 1)` steps —
-`6.86` steps, 34 min, at the 2 h forecast — and oscillation slower than that passes
-through unattenuated. A fixed `G` in place of `G_L` is the identity at `L = 1` and
-stops contracting. The `cumsum` of strictly-positive spreads guarantees a monotone
-ascending fan around the median.
+The median is the slot's own anchor plus the head's per-step delta. At
+initialization (`delta ≈ 0`) it is `≈ anchor`, a flat persistence forecast. Its
+smoothness comes from the step states the head reads, not from this assembly
+([§8.2](#82-the-step-state-spline)). The `cumsum` of strictly-positive spreads
+guarantees a monotone ascending fan around the median.
 
 `carry_spread` is **per level**, in `head_raw[..., 1:]`'s own layout —
 `[.75 .9 .95 | .25 .1 .05]`, six risk-space offsets — and defaults to `0` (only
@@ -582,24 +564,48 @@ variances. Addition is the perfectly-correlated bound, and over four rolls it is
 twice as wide as it should be. `hypot(0, x) = x`, so a zero carry is the identity
 and every non-rolling caller is bit-unaffected.
 
-### 8.2 The per-span median DCT basis
+### 8.2 The step-state spline
 
-`global_median_basis(n, G, 'dct')` builds DCT-II cosine modes over a span of
-`n = L · PATCH_SIZE` steps and L2-orthonormalizes the columns:
+The head runs on one `D_MODEL` state per 5-minute step, interpolated from the
+trunk's patch states by a uniform cubic B-spline. `step_states(x, mask_idx,
+attn_mask)` returns `(B, M, S, D_MODEL)` from the final-normed `x` `(B, T, D_MODEL)`.
+
+**Nodes.** `mask_idx` groups the `M` slots into contiguous **spans**. For a span of
+`L` patches the node sequence is: the visible patch immediately left of the span
+(node `0`) where it exists, the `L` masked patches (nodes `1..L`) in order, the
+visible patch immediately right of the span (node `L+1`) where it exists. A
+neighbour **exists** when it lies inside the window and the span's first (last)
+patch may read it under the attention mask of [§4](#4-attention-mask), so a pad row
+is never a node. Node `n`'s state is `x[b, patch(n)]`.
+Every node sits at its patch centre.
+
+**Coordinate.** Step `j` (`0..S-1`) of masked patch `i` (`1..L`) sits at
 
 ```
-B[s, j] = cos( π (s + 0.5) j / n )     for s in [0, n), j in [0, G)
-then normalize each column to unit L2 norm.
+c = i + (j − (S−1)/2) / S          # node units; S = PATCH_SIZE
 ```
 
-`G` is `min(G_L, n)`, the span-scaled dimension of
-[§3.1](#31-recovering-dimensions). The cut-off period `2 n / (G_L − 1)` varies with
-`L` — `60 / 40 / 36 / 34` min at `L = 1 / 2 / 3 / 4` — so report it per span length
-rather than as one figure. What `G_L` holds constant is `K` columns per patch.
+**Weights.** With `k = floor(c)` and `u = c − k`,
 
-This basis is **not** saved in the checkpoint — recompute it, once per span length.
-The per-patch `step_basis`, of shape `(PATCH_SIZE, K) = (6, 2)`, **is** saved; read
-it from the state dict or recompute the same way over `n = 6`.
+```
+w(u) = ( (1−u)³/6, (3u³ − 6u² + 4)/6, (−3u³ + 3u² + 3u + 1)/6, u³/6 )
+h(c) = Σ_{o = −1..2}  w_o(u) · N[ clamp(k + o, lo, hi) ]
+```
+
+`w` sums to 1 at every `u`.
+
+**Ends.** `lo = 0` when node `0` exists, else `1`; `hi = L+1` when node `L+1`
+exists, else `L`. The clamp repeats the end node, so a span at either edge of the
+window uses the same formula as one bracketed on both sides.
+
+**Matrix form.** The weights depend only on `(L, has_left, has_right)`, never on
+the states, so they are one fixed matrix `W(L, has_left, has_right)` of shape
+`(L·S) × (L + has_left + has_right)` — rows in patch-major step order
+(`row = (i−1)·S + j`), columns the nodes `lo..hi` ascending — and the span's step
+states are `H = W · N`. Rows sum to 1.
+
+Nothing here is saved in the checkpoint: `W` is recomputed per
+`(L, has_left, has_right)`.
 
 ### 8.3 Decoding to mg/dL
 
@@ -805,9 +811,9 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 
 | constant | value |
 |---|---|
-| Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v4` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
-| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v4` |
-| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v4` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
+| Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v5` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
+| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v5` |
+| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
 | `N_INPUT_FEATURES` / `PATCH_DIM` | `5` / `30` |
@@ -819,8 +825,6 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
 | `N_SPREADS` / `N_QUANTILES` | `3` / `7` |
 | `BG_QUANTILE_SPREAD_MIN` | `1e-3` |
-| `BG_HEAD_STEP_BASIS_DIM` (K) / type | `2` / `'dct'` |
-| `BG_HEAD_MEDIAN_MODE` / `GLOBAL_DIM` | `'global'` / `8` `= PREDICTION_PATCHES · K` at a span of `PREDICTION_PATCHES`; per span `G_L = K · L` (§3.1) |
 | `MAX_MASKED_PATCHES` (M) | **checkpoint-carried** (§3.1); surplus slots are padded and discarded |
 | `ROPE_BASE` | `1000` |
 | RMSNorm `eps` | `1e-6` |
@@ -847,12 +851,12 @@ space, carb/insulin/exercise in log1p space).
   numeric): per-channel `normalize` / `denormalize`; `kovatchev_f` /
   `kovatchev_f_inv` with their clamp guards; the per-slot anchor; the step-major
   patch flatten; the masked-patch fill (feat 0 zeroed, feat 4 set, the maskable
-  feats at `normalize(0)` or the announced plan); the bool attention mask;
-  `assemble_quantiles` (softplus, cumsum, per-span DCT projection); and the
-  optional conformal apply.
+  feats at `normalize(0)` or the announced plan); the bool attention mask; the
+  step-state spline (§8.2) and the head MLP over its output;
+  `assemble_quantiles` (softplus, cumsum); and the optional conformal apply.
 - **Watch the `bg_masked` bit.** Nothing else writes feat 4, so a builder that
   forgets it announces every masked patch as an observation, with every shape still
   matching and every fan still monotone.
-- **Keep the decode constants exact.** `ROPE_BASE`, the median mode/basis, and the
+- **Keep the decode constants exact.** `ROPE_BASE`, the B-spline weights and the
   quantile floor are not stored in the checkpoint; a released model is locked to
-  the values in §11.
+  the values in §11 and the spline of §8.2.
