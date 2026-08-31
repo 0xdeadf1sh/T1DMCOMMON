@@ -41,24 +41,28 @@ do not "fix" it.
 
 ## Inference runtime
 
-**ExecuTorch**, one exported model on **two** implemented backends: **CPU fp32
-via XNNPACK** as the reference authority, and **GPU fp16 via the Vulkan compute
-delegate** on the Mali GPU as a measured shadow, behind a clean backend seam. No
-integer quantization. The Vulkan delegate needs a custom `executorch-android` AAR
-built with `EXECUTORCH_BUILD_VULKAN=ON` and its own `.vulkan.pte`; the stock AAR
-registers XNNPACK only.
+**ExecuTorch**, one exported model on **one** backend: **CPU fp32 via XNNPACK**,
+which the stock `executorch-android` AAR registers. No integer quantization. The
+seam that keeps the backend replaceable is still there, but `InferenceFactory`
+registers this one and `BackendId` carries no other executing path.
 
-**There is no NPU inference.** The Neuron and LiteRT backend ids are enumerated
-but route nowhere — each `load` fails loudly with its own reason, so a mis-routed
-model is refused rather than silently served. The NeuroPilot runtime ships
-through Play feature delivery, which a sideload-only build cannot fetch, and the
-stock ExecuTorch AAR carries no MediaTek delegate. Any claim that the fp16 shadow
-runs on the NPU is a claim about the GPU.
+**Only an `executorch_xnnpack` artifact reaches the device.** `ModelStore` refuses
+a descriptor declaring any other engine, and `ModelSyncCoordinator` syncs only that
+filename infix, so a model built for a delegate this runtime does not register is
+never downloaded and never loaded.
+
+**There is no GPU or NPU inference.** The NeuroPilot runtime ships through Play
+feature delivery, which a sideload-only build cannot fetch, and the stock
+ExecuTorch AAR registers the XNNPACK CPU delegate and nothing else.
+
+`../T1DMDROID-vk-build` is a separate checkout carrying the Vulkan compute
+delegate and its vendored `EXECUTORCH_BUILD_VULKAN=ON` AAR. It is not the project
+and its backend is not one `T1DMDROID` has.
 
 Everything numerically sensitive — the Savitzky-Golay causal smoother,
 normalize/denormalize, the Kovatchev transform and its inverse, quantile assembly
-— runs in the **fp32/fp64 Rust core on CPU**. Only the transformer core reaches
-the GPU, which is what makes fp16 tolerable there.
+— runs in the **fp32/fp64 Rust core on CPU**. Only the transformer core runs in
+the ExecuTorch graph.
 
 The artifact is a **single fixed shape**; the graph is cut in risk space, with the
 anchor, inverse transform and quantile assembly left to Rust. The exporter lives
@@ -116,9 +120,9 @@ longer exists. The band correction goes only where the window it was fitted over
 reaches the change; a blanket drop would narrow the displayed band over a
 week-old correction, the wrong direction to fail in.
 
-Agreement between the fp16 GPU path and the fp32 CPU path is measured and
-surfaced; safety decisions gate on it. A non-authoritative backend may render a
-forecast before it has cleared that gate, but may never feed a dose.
+Dose advice is scored on the fp32 XNNPACK CPU path or not at all. A model served
+by the `StubBackend` — no artifact, or one that would not load — still renders a
+forecast, and the dose calculator refuses on it.
 
 **Cold start**: the model needs a minimum context of patches before it may
 predict, and a configurable warm-up window on top suppresses forecasts until
@@ -190,7 +194,6 @@ The fail-closed architecture, load-bearing and not to be weakened:
   collapsed band, mis-ordered quantiles
 - **every rail structurally fail-closed** on missing, degenerate or stale input:
   it blocks rather than silently doing nothing
-- an **fp16 ↔ fp32 agreement gate**
 - a point-of-decision confirmation the user must acknowledge
 
 Guard-rail *toggles* exist (maximum bolus, IOB ceiling, predicted-low veto), but
