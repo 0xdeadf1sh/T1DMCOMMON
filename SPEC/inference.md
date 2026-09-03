@@ -87,7 +87,7 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 | key | contents | needed for inference? |
 |---|---|---|
 | `arch_version` | e.g. `'risk-v5'` | provenance |
-| `loss_schema` | e.g. `'kendall-pinball-dilate-v3'` | provenance |
+| `loss_schema` | e.g. `'kendall-pinball-dilate-mse-v4'` | provenance |
 | `step` | training step | provenance |
 | `model_state_dict` | live weights | base weights |
 | `model_ema_state_dict` | EMA shadow weights (same keys) | **use these** |
