@@ -363,6 +363,23 @@ What the edge is compared *against* is the consumer's own hypo and hyper
 threshold: a fixed clinical pair in `T1DMAI`'s validation table, the patient's
 configurable bands on the phone (see *Accepted divergences* 3).
 
+**The crossing alarm.** A checkpoint may carry a crossing head beside the fan
+(`inference.md` §8.5): per forecast step `t`, the probability that BG has gone
+below the hypo threshold at any step up to and including `t`, and its twin for
+above the hyper threshold. Both are cumulative within the window and so
+non-decreasing in `t`. The thresholds the head was trained on travel in the
+descriptor; the scored crossing alarm fires when the window-end probability
+exceeds
+
+| level | value | governs |
+| --- | --- | --- |
+| `HYPO_ALARM_PROB` | `0.25` | the crossing probability above which the scored hypo crossing alarm fires |
+| `HYPER_ALARM_PROB` | `0.25` | its hyper twin |
+
+Evaluation properties like the four above, not descriptor-carried. The edge alarm
+and the crossing alarm are scored side by side under their own names; neither
+replaces the other, and a consumer states which one it reads.
+
 ### 6.2 The band projection
 
 *Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMSERVER` scores nothing.*

@@ -46,8 +46,15 @@ position input, and nothing about the spline is stored in the checkpoint. The DI
 shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
 node rule, the coordinate and the weights.
 
-**Configured capacity is medium** — `D_MODEL` 128, `N_LAYERS` 8, `N_HEADS` 8, set
-through `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
+**A crossing head reads the same step states.** Two logits per step: the
+cumulative probability that BG has gone below 70 mg/dL, and above 180, within the
+span so far. Binary cross-entropy against the true trajectory's cumulative
+indicator, on the backward only; `val_loss_total` and checkpoint selection are
+unchanged. The validation table scores its window-end alarm beside the τ.25 edge
+alarm. `../SPEC/inference.md` §8.5 and `../SPEC/invariants.md` §6.1.
+
+**Configured capacity** — `D_MODEL` 32, `N_LAYERS` 32, `N_HEADS` 1, set through
+`resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
 `../SPEC/inference.md`.
 
 The clinical LBGI/HBGI indices in `T1DMSIM` stay on the published constants so

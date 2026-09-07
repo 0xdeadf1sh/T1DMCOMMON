@@ -149,6 +149,7 @@ globals from the checkpoint and instantiate.
 | `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
 | `BG_HEAD_HIDDEN` | head MLP width | — | `bg_head.0.weight` rows |
 | `N_SPREADS` | 3 | — | `bg_head.4.weight` rows `= 1 + 2·N_SPREADS` |
+| `CROSSING_HEAD_HIDDEN` | crossing head MLP width (§8.5) | — | `crossing_head.0.weight` rows |
 
 A few decode-critical constants are **not** stored anywhere and are fixed released
 defaults — reproduce them exactly: `ROPE_BASE = 1000`, RMSNorm `eps = 1e-6`,
@@ -181,6 +182,11 @@ the rule in [§8.2](#82-the-step-state-spline); a consumer rejects a value it do
 not implement rather than assuming this one. A sidecar synced without the `head`
 block decodes `head_raw` alone and needs no decoder name.
 
+Under `risk-v6` the graph also emits `crossing_logits` `(B, M, PATCH_SIZE, 2)` at
+output index 3, and the descriptor carries a `crossing` block naming it
+([§8.5](#85-the-crossing-head)). A consumer reading outputs positionally may
+ignore it; one that reads it takes the thresholds from the block.
+
 `geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts
 (`T − PREDICTION_PATCHES`), which a shorter export lowers;
 `ARCH_MAX_CONTEXT_PATCHES` is the architecture's own ceiling.
@@ -196,6 +202,7 @@ x = final_norm(x)                             # RMSNorm
 H        = step_states(x, mask_idx, attn_mask)   # (B, M, PATCH_SIZE, D_MODEL) — §8.2
 head_raw = bg_head(H)                            # (B, M, PATCH_SIZE, 7)
 q_tau, median = assemble_quantiles(head_raw, anchor_bg, mask_idx)   # §8
+crossing_logits = crossing_head(H)               # (B, M, PATCH_SIZE, 2) — §8.5, risk-v6
 ```
 
 - `step_states` reads the masked patches **by index**, never as a trailing slice:
@@ -497,7 +504,7 @@ their outputs are discarded by `valid`.
 ## 8. Forward pass and output decode
 
 **Signature** (frozen):
-`forward(patches, attn_mask, anchor_bg, mask_idx, return_time=False) -> (q_tau, median)`.
+`forward(patches, attn_mask, anchor_bg, mask_idx, return_time=False, return_crossing=False) -> (q_tau, median)`.
 
 - `patches`: `(B, T, PATCH_DIM)`, `T ≤ MAX_SEQ_LEN` — a batch is left-padded to
   its own longest window, so `T` varies and is never fixed at `MAX_SEQ_LEN`;
@@ -508,6 +515,9 @@ their outputs are discarded by `valid`.
 - `median`: `(B, M, PATCH_SIZE)` in risk space (`== q_tau[..., 3]`).
 - `return_time=True` additionally returns the diagnostic hour-of-day probe logits,
   one per slot; they never affect `q_tau`/`median`.
+- `return_crossing=True` returns `(q_tau, median, time_pred, crossing_logits)`:
+  `time_pred` is `None` unless `return_time` is also set, and `crossing_logits` is
+  `(B, M, PATCH_SIZE, 2)` raw logits (§8.5). Neither flag changes `q_tau`/`median`.
 
 A masked set smaller than `M` pads the surplus slots, which gather patch 0 and
 carry a legal anchor; a `(B, M)` `valid` bool marks them and the decode drops
@@ -706,6 +716,39 @@ calibrated fan both exist and only the raw one may be classified on, stored, or
 sent. A constitutive one is fitted with the model and travels inside it, so one fan
 exists and it is stored and sent like any other output. Neither may move a median.
 
+### 8.5 The crossing head
+
+A second MLP over the same step states `H` (§8.2), `Linear(D_MODEL, CROSSING_HEAD_HIDDEN)
+→ SiLU → Linear(CROSSING_HEAD_HIDDEN, 2)`, applied per step with shared weights:
+
+```
+crossing_logits = crossing_head(H)              # (B, M, PATCH_SIZE, 2) raw logits
+crossing        = sigmoid(crossing_logits)      # (P·S, 2) after dropping padded slots
+```
+
+Column `0` is the probability that true BG has been **below** `hypo_mgdl` at any step
+of the span up to and including this one; column `1` that it has been **above**
+`hyper_mgdl`. Both are cumulative within a masked span in slot order, so each is
+non-decreasing along the span; the value at the span's last step is the
+probability the window crosses at all. The head is trained by binary cross-entropy
+against the cumulative indicator of the true trajectory; it reads the trunk, never
+`q_tau`, and no consistency between the fan and the crossing probability is
+enforced or implied.
+
+The thresholds are a property of the checkpoint and travel in the descriptor:
+
+```
+"crossing": {"output_index": 3, "output_name": "crossing_logits",
+             "shape": [1, M, PATCH_SIZE, 2], "columns": ["hypo", "hyper"],
+             "hypo_mgdl": 70.0, "hyper_mgdl": 180.0, "cumulative": true}
+```
+
+A descriptor without the block carries no head, and the fan's edge alarm
+(`invariants.md` §6.1) is the only alarm available. A consumer never assumes the
+thresholds; it reads them. The probability a scored alarm fires on is the
+window-end value against `HYPO_ALARM_PROB` / `HYPER_ALARM_PROB`, which are
+evaluation constants (`invariants.md` §6.1), not descriptor fields.
+
 ---
 
 ## 9. End-to-end recipe
@@ -813,6 +856,7 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 |---|---|
 | Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v5` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
 | `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v5` |
+| crossing thresholds `hypo_mgdl / hyper_mgdl` | **descriptor-carried** (§8.5); `70.0 / 180.0` under `risk-v6`, which adds the crossing output to `risk-v5` and changes no other constant |
 | risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
@@ -853,7 +897,8 @@ space, carb/insulin/exercise in log1p space).
   patch flatten; the masked-patch fill (feat 0 zeroed, feat 4 set, the maskable
   feats at `normalize(0)` or the announced plan); the bool attention mask; the
   step-state spline (§8.2) and the head MLP over its output;
-  `assemble_quantiles` (softplus, cumsum); and the optional conformal apply.
+  `assemble_quantiles` (softplus, cumsum); the optional conformal apply; and, under
+  `risk-v6`, a sigmoid over `crossing_logits` (§8.5).
 - **Watch the `bg_masked` bit.** Nothing else writes feat 4, so a builder that
   forgets it announces every masked patch as an observation, with every shape still
   matching and every fan still monotone.
