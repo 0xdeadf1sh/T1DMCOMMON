@@ -28,18 +28,21 @@ Speed figures are machine-dependent, and a ratio can improve because the
 ## What the simulator is calibrated to
 
 The calibration target is the owner's own CGM record, read through the
-hypo-onset profile `scripts/onset_profile.py` prints: share of onsets over
-within 15 min, share with nadir below 55, median duration, median nadir, share
-starting from at least 130 mg/dL two hours earlier, onsets per week. The
+hypo-onset profile `scripts/onset_profile.py` prints: share of onsets within
+15 min, median duration, share with nadir below 55, median nadir, share starting
+from at least 130 mg/dL two hours earlier, median origin, awake share
+(07–23 h), onsets per week. The
 simulator's `CLAUDE.md` carries the target values and the tolerance. The public
 cohorts in `diff/README.md` (OhioT1DM, ShanghaiT1DM, AZT1D) are a reference
 comparison only; nothing is tuned to them, and the numbers there predate the
 counter-regulation rewrite until the report is regenerated.
 
-The remaining gap against the record is the share of onsets that begin from at
-least 130 mg/dL two hours earlier: 24 % in the simulator against 43 % in the
-record. Its first-of-cluster lows start from a median 112 mg/dL, the record's from
-144, and the share trades against brevity along the counter-regulation threshold:
+Three profile fields sit outside the simulator's own ±10 pp / ±10 min band: the
+brief share (36 % against the record's 50 %, −14 pp), the median duration (30 min
+against 18 min, +12 min) and, the largest, the share of onsets that begin from at
+least 130 mg/dL two hours earlier — 24 % in the simulator against 46 % in the
+record, −22 pp. Its first-of-cluster lows start from a median 112 mg/dL, the record's from
+144, and that share trades against brevity along the counter-regulation threshold:
 neither a two-stage response nor any dosing lever tried (over-bolus bias, shorter
 meal tails, looser bolus gate, tighter basal, lower correction target) moves it
 past 30 %.

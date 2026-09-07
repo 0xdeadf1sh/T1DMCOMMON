@@ -5,9 +5,9 @@ the ExecuTorch artifact plus the descriptor `T1DMDROID` loads. Python. MIT.
 
 Passive tooling — run by hand when a new model is wanted.
 
-## The risk-v5 architecture
+## The risk-v6 architecture
 
-What `ARCH_VERSION = 'risk-v5'` carries that matters across the suite:
+What `ARCH_VERSION = 'risk-v6'` carries that matters across the suite:
 
 **No input or target smoothing.** The causal Savitzky-Golay smoother was deleted.
 Inputs, the forecast target and the anchor are the raw post-noise simulator

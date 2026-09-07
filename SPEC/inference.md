@@ -86,7 +86,7 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 
 | key | contents | needed for inference? |
 |---|---|---|
-| `arch_version` | e.g. `'risk-v5'` | provenance |
+| `arch_version` | e.g. `'risk-v6'` | provenance |
 | `loss_schema` | e.g. `'kendall-pinball-dilate-mse-v4'` | provenance |
 | `step` | training step | provenance |
 | `model_state_dict` | live weights | base weights |
@@ -101,6 +101,22 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 Some checkpoints carry a leaner set and may **omit `training_config`**; recover
 the architecture dimensions from the state-dict tensor shapes
 ([§3.1](#31-recovering-dimensions)).
+
+**`arch_version` compatibility.** The descriptor's `arch_version` is provenance,
+not a feature switch: nothing in the decode branches on it. A consumer is free to
+reject a version it does not know, but that makes the string a hard gate, and
+every consumer holding such a gate must be re-pointed in the same change that
+moves `T1DMAI/config.py`'s `ARCH_VERSION`. An artifact whose version no shipped
+consumer accepts must not be deployed.
+
+**Pending.** `ARCH_VERSION` is `risk-v6`; `T1DMDROID` still rejects anything but
+`risk-v5` (`crates/t1dm-core/src/preproc.rs:23`, checked at `preproc.rs:299`), so
+`parse_descriptor` fails before a tensor is read and the app falls back with no
+model. Three places must move together there: `preproc.rs:23`,
+`testdata/reference_descriptor.json:8`, and the `Inference.kt:70` comment. The
+extra fourth graph output is harmless — the Kotlin backend reads outputs
+positionally and `DescriptorDto` is not `deny_unknown_fields`. Until that lands,
+no `risk-v6` artifact goes to the phone.
 
 ### 2.2 Which weights to run
 
@@ -723,14 +739,17 @@ A second MLP over the same step states `H` (§8.2), `Linear(D_MODEL, CROSSING_HE
 
 ```
 crossing_logits = crossing_head(H)              # (B, M, PATCH_SIZE, 2) raw logits
-crossing        = sigmoid(crossing_logits)      # (P·S, 2) after dropping padded slots
+crossing        = sigmoid(crossing_logits)      # (P, PATCH_SIZE, 2) after dropping padded slots
 ```
 
 Column `0` is the probability that true BG has been **below** `hypo_mgdl` at any step
 of the span up to and including this one; column `1` that it has been **above**
-`hyper_mgdl`. Both are cumulative within a masked span in slot order, so each is
-non-decreasing along the span; the value at the span's last step is the
-probability the window crosses at all. The head is trained by binary cross-entropy
+`hyper_mgdl`. The TARGET is cumulative within a masked span in slot order, and the
+head is trained toward it, so each column is only APPROXIMATELY non-decreasing
+along the span — nothing in the graph enforces it, and a raw output does decrease
+step to step. A consumer that needs monotonicity takes a running maximum over the
+span itself. The value at the span's last step is the probability the window
+crosses at all. The head is trained by binary cross-entropy
 against the cumulative indicator of the true trajectory; it reads the trunk, never
 `q_tau`, and no consistency between the fan and the crossing probability is
 enforced or implied.

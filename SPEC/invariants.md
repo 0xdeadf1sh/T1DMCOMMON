@@ -145,7 +145,7 @@ do not simplify it to a zero.
 The same family, **re-anchored for the network**. The model's input and output BG
 both live here.
 
-The current anchoring (`ARCH_VERSION = risk-v5`) is solved so that `f(40) = -√10`
+The current anchoring (`ARCH_VERSION = risk-v6`) is solved so that `f(40) = -√10`
 and `f(400) = +√10` — risk 100 at both rails:
 
 ```
@@ -251,7 +251,7 @@ is the reference implementation:
 
 ```
 magnitude = duration_min · carb_equiv_per_min      # grams
-ramp      = min(15, duration_min / 2)              # minutes
+ramp      = max(dt, min(15, duration_min / 2))     # minutes; dt = 5
 f(t)      = t / ramp                               0 ≤ t < ramp
           = 1                                      ramp ≤ t ≤ duration_min
           = exp(−(t − duration_min) / 30)          duration_min < t ≤ duration_min + 90
@@ -366,8 +366,9 @@ configurable bands on the phone (see *Accepted divergences* 3).
 **The crossing alarm.** A checkpoint may carry a crossing head beside the fan
 (`inference.md` §8.5): per forecast step `t`, the probability that BG has gone
 below the hypo threshold at any step up to and including `t`, and its twin for
-above the hyper threshold. Both are cumulative within the window and so
-non-decreasing in `t`. The thresholds the head was trained on travel in the
+above the hyper threshold. The training target is cumulative within the window and
+so non-decreasing in `t`; the head's own output is not — take a running maximum if
+you need it. The thresholds the head was trained on travel in the
 descriptor; the scored crossing alarm fires when the window-end probability
 exceeds
 
