@@ -246,20 +246,14 @@ dur = clamp(k · θ · 4, 120, 360)       # minutes
 `GI 100 → (2.0, 15.0, 120 min)`; `GI 50 → (3.25, 22.5, 292.5 min)`. The duration
 clamp binds below about GI 31.
 
-The exercise disposal curve, for the same reason. `T1DMSIM.simulator.exercise_curve`
-is the reference implementation:
+The exercise gamma, for the same reason:
 
 ```
 magnitude = duration_min · carb_equiv_per_min      # grams
-ramp      = max(dt, min(15, duration_min / 2))     # minutes; dt = 5
-f(t)      = t / ramp                               0 ≤ t < ramp
-          = 1                                      ramp ≤ t ≤ duration_min
-          = exp(−(t − duration_min) / 30)          duration_min < t ≤ duration_min + 90
-curve     = f at bucket midpoints, scaled to sum to magnitude
+k         = 3.0
+θ         = 15.0
+dur       = duration_min + 90                      # minutes
 ```
-
-Peak disposal is the intensity, `carb_equiv_per_min` per minute, whatever the
-duration: a long session lasts longer, it does not hit harder.
 
 `carb_equiv_per_min` is per-patient. `T1DMSIM` uses a population constant of
 `0.5`; `T1DMDROID` takes the patient's own value and defaults to the same `0.5`.

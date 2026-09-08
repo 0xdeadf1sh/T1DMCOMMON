@@ -25,27 +25,20 @@ engines replay the same event stream and shift together.
 Speed figures are machine-dependent, and a ratio can improve because the
 *baseline* got slower.
 
-## What the simulator is calibrated to
+## The known realism weakness
 
-The calibration target is the owner's own CGM record, read through the
-hypo-onset profile `scripts/onset_profile.py` prints: share of onsets within
-15 min, median duration, share with nadir below 55, median nadir, share starting
-from at least 130 mg/dL two hours earlier, median origin, awake share
-(07–23 h), onsets per week. The
-simulator's `CLAUDE.md` carries the target values and the tolerance. The public
-cohorts in `diff/README.md` (OhioT1DM, ShanghaiT1DM, AZT1D) are a reference
-comparison only; nothing is tuned to them, and the numbers there predate the
-counter-regulation rewrite until the report is regenerated.
+Two gap-score metrics sit outside the envelope the three cohorts span: hypo
+episodes per day (z = +1.46, 1.18/day against 0.64–1.02) and TBR1 (z = +1.06).
+The simulator runs mild lows more often than any real cohort. The other eighteen
+metrics are inside it.
 
-Three profile fields sit outside the simulator's own ±10 pp / ±10 min band: the
-brief share (36 % against the record's 50 %, −14 pp), the median duration (30 min
-against 18 min, +12 min) and, the largest, the share of onsets that begin from at
-least 130 mg/dL two hours earlier — 24 % in the simulator against 46 % in the
-record, −22 pp. Its first-of-cluster lows start from a median 112 mg/dL, the record's from
-144, and that share trades against brevity along the counter-regulation threshold:
-neither a two-stage response nor any dosing lever tried (over-bolus bias, shorter
-meal tails, looser bolus gate, tighter basal, lower correction target) moves it
-past 30 %.
+On the cadence-fair fifteen-minute grid Δ-BG SD is 12.14 against 10.65–14.55
+across the cohorts (z = −0.47); at raw five-minute cadence it is still about 10%
+low, 5.38 against Ohio 5.89 and AZT1D 6.02.
+
+The simulator sits closer to two cohorts than those cohorts sit to each other:
+W₁ 5.9 to Ohio and 5.3 to Shanghai, against a real-vs-real floor of 10.1. That is
+a tuning signature. Realism claims lean on AZT1D, at 22.8.
 
 An audit of the comparison tooling fixed fifteen defects in the testing code —
 entropy measures inflated across gaps, a subject silently dropped, NaN-inflated
