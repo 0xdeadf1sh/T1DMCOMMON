@@ -5,9 +5,9 @@ the ExecuTorch artifact plus the descriptor `T1DMDROID` loads. Python. MIT.
 
 Passive tooling — run by hand when a new model is wanted.
 
-## The risk-v6 architecture
+## The risk-v5 architecture
 
-What `ARCH_VERSION = 'risk-v6'` carries that matters across the suite:
+What `ARCH_VERSION = 'risk-v5'` carries that matters across the suite:
 
 **No input or target smoothing.** The causal Savitzky-Golay smoother was deleted.
 Inputs, the forecast target and the anchor are the raw post-noise simulator
@@ -45,13 +45,6 @@ six spreads; the median is the slot's anchor plus the delta. The head takes no
 position input, and nothing about the spline is stored in the checkpoint. The DILATE
 shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
 node rule, the coordinate and the weights.
-
-**A crossing head reads the same step states.** Two logits per step: the
-cumulative probability that BG has gone below 70 mg/dL, and above 180, within the
-span so far. Binary cross-entropy against the true trajectory's cumulative
-indicator, on the backward only; `val_loss_total` and checkpoint selection are
-unchanged. The validation table scores its window-end alarm beside the τ.25 edge
-alarm. `../SPEC/inference.md` §8.5 and `../SPEC/invariants.md` §6.1.
 
 **Configured capacity** — `D_MODEL` 32, `N_LAYERS` 32, `N_HEADS` 1, set through
 `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
