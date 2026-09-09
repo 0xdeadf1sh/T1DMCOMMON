@@ -194,9 +194,11 @@ The server record rides the durable outbox, distinguished by `OutboxKind`. A
 forecast does not: at contract `0.5.0` it goes up the WebSocket, nothing stores
 it, and a frame that finds no socket is lost rather than queued.
 
-The bridge's failures are its own: a host that is off, unreachable, or rejecting
-its credential backs off one row and must never stand the queue down — that would
-let a third party stall the patient's own sync.
+Each destination drains its own FIFO lane, and a failure is confined to the lane
+that suffered it. A host that is off, unreachable, or rejecting its credential
+stands down only its own lane; neither lane can take the other's batch slots, so
+a backlog of older rows cannot starve the other destination. Eviction gives the
+bridge a reserved share of the queue, since it ranks below every server kind.
 
 Basal and exercise are withheld deliberately. Nightscout's basal is a **rate**
 where §3 makes ours an **amount**, and `exercise` is carbohydrate-equivalent
