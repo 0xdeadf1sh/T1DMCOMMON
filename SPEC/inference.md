@@ -701,19 +701,10 @@ fan is what the alarm engine, the dose calculator, the accuracy suite, the
 order-statistic rule above, and because both publish τ.05–.95 coverage under one
 name, neither may change it alone.
 
-**Corrective versus constitutive.** The delta above *corrects* a fan the model
-already emitted, which is why it is display-only. The same fit and apply also give a
-band to a forecaster that has none — `T1DMDROID`'s classical baseline starts from a
-degenerate fan whose seven levels are all the median, and its residual quantiles
-become its interval. `invariants.md` §6.2's degenerate-band property makes that
-exact: a collapsed fan projects to its own point forecast, so the apply opens it
-without moving anything.
-
-The two differ in what a consumer may do with the result. A corrective delta is
-fitted after the model, stored apart from it, and skippable, so a raw and a
-calibrated fan both exist and only the raw one may be classified on, stored, or
-sent. A constitutive one is fitted with the model and travels inside it, so one fan
-exists and it is stored and sent like any other output. Neither may move a median.
+The delta *corrects* a fan the model already emitted. It is fitted after the
+model, stored apart from it, and skippable, so a raw and a calibrated fan both
+exist and only the raw one may be classified on, stored, or sent. It may never
+move a median.
 
 ---
 

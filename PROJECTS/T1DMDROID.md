@@ -144,41 +144,9 @@ raw fan, and the median never moves. A stored correction lapses one fitting
 window after it was made, and replacing the artifact under the same id drops the
 correction and the forecasts it was fitted on together.
 
-**A classical baseline runs beside the exported models**, under `model_id`
-`ridge-cgm-iob-cob-v1`: direct multi-step ridge on twelve lagged CGM values,
-causal IOB/COB, and the committed carb appearance and insulin action summed over
-the next 30, 60 and 120 minutes — fitted on device from the patient's own history
-when the user presses the button on the model's own screen. It is what makes a
-forecast-accuracy figure mean anything, so the fit reports held-out RMSE against
-persistence per horizon.
-
-Those forward blocks are what make it respond to a logged dose at all. On-board
-alone is a scalar at the anchor, and doses snap to the *nearest* grid slot, so one
-landing after the anchor moved nothing until the next CGM sample arrived. They
-count every committed curve overlapping the window, including one starting after
-the anchor — the same information the neural model's prediction-zone channels
-carry. The cost: the held-out RMSE is mildly optimistic and may not be quoted
-against a strictly-causal figure without saying so.
-
-From the app's side it is an ordinary model wherever a model is a fan: it joins
-the running set, selecting it hands it the graph, the alert and the widget,
-it is scored by the same suite through the same §3.6 gates, and it streams under
-its own id — `../SPEC/http-api.md`'s `prediction` frame carries `model_id`
-whatever produced the fan.
-
-**It cannot drive the dose calculator.** `:calc`'s rolled search sizes its context
-from descriptor patch geometry and runs a graph forward per roll with the
-candidate dose in the prediction zone, so a model with neither a descriptor nor a
-graph cannot answer it. With the baseline selected the calculator, the ISF/ICR
-probe and the rolled display overlay fail closed — safe, but the refusal reads
-"no selected model", which names the wrong cause.
-
-Three other specifics. It has no descriptor and no artifact, so it sits beside
-the discovered set rather than inside it, and outside the running cap. Its band
-is constitutive, not corrective — `../SPEC/inference.md` §8.4. And it is fitted on
-gapped history rather than the carry-forward series the neural cycle conditions
-on, because a filled gap is a flat stretch that never happened and a
-least-squares fit learns persistence from enough of them.
+**Every model the app runs is an exported graph.** There is no on-device
+forecaster without a descriptor and an artifact, so a device with no `.pte`
+publishes no forecast, and neither does the warm-up window.
 
 ## Safety posture
 
