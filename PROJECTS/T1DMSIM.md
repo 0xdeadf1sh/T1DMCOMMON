@@ -25,25 +25,31 @@ engines replay the same event stream and shift together.
 Speed figures are machine-dependent, and a ratio can improve because the
 *baseline* got slower.
 
-## The known realism weakness
+## The dosing policy
 
-Two gap-score metrics sit outside the envelope the three cohorts span: hypo
-episodes per day (z = +1.46, 1.18/day against 0.64–1.02) and TBR1 (z = +1.06).
-The simulator runs mild lows more often than any real cohort. The other eighteen
-metrics are inside it.
+Bolus count, clock time and dose are drawn independent of meals, carbs and BG,
+so the insulin channel carries its own effect rather than a meal's shadow. It is a
+deliberate departure from every real patient; never justify it as realism. Most
+boluses with no meal carbs nearby fall in a meal-free night window. The only
+BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold.
 
-On the cadence-fair fifteen-minute grid Δ-BG SD is 12.14 against 10.65–14.55
-across the cohorts (z = −0.47); at raw five-minute cadence it is still about 10%
-low, 5.38 against Ohio 5.89 and AZT1D 6.02.
+Below 180 mg/dL only insulin brings BG down; above it renal clearance does, at
+the UVA/Padova rate. An unbolused meal stays high for hours. With nothing but insulin to remove
+glucose and insulin blind to meals, the BG distribution is wide by construction:
+mean about 210 mg/dL, SD about 115, and roughly 12% of CGM time at the 400 ceiling,
+which the cache's rail filter discards. True BG has no
+floor and can go below zero; only the CGM reading is clipped.
 
-The simulator sits closer to two cohorts than those cohorts sit to each other:
-W₁ 5.9 to Ohio and 5.3 to Shanghai, against a real-vs-real floor of 10.1. That is
-a tuning signature. Realism claims lean on AZT1D, at 22.8.
+## Stale artefacts on disk
 
-An audit of the comparison tooling fixed fifteen defects in the testing code —
-entropy measures inflated across gaps, a subject silently dropped, NaN-inflated
-episode denominators. Analysis code deserves the same scrutiny as the thing it
-analyses.
+`diff/README.md`, `diff/stats.json` and the `uva_padova/` reports predate the
+randomised dosing policy and describe a different simulator. Regenerating them
+needs the three real datasets and simglucose. Until then
+`test_unbiased_build_sits_near_baseline` compares fresh caches against that stale
+baseline and fails.
+
+Analysis code deserves the same scrutiny as the thing it analyses: an audit of
+the comparison tooling once fixed fifteen defects in it.
 
 ## Working in this project
 
