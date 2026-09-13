@@ -61,8 +61,8 @@ T1DMAI's own cache builder is gone; it relies on
 cache, which also emits `normalization_stats.json` beside `meta.json`.
 
 **Regenerate normalization statistics from the actual training cache**, not from
-a re-simulation — the re-simulate path is slightly off-distribution against the
-rail-filtered cache.
+a re-simulation — the re-simulate path skips the cache's hypoglycemia
+oversampling.
 
 `normalization_stats.json` is gitignored, so a fresh clone has none. Every
 checkpoint embeds its own copy, the authoritative z-space for those weights; the

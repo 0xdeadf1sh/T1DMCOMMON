@@ -36,9 +36,8 @@ BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold.
 Below 180 mg/dL only insulin brings BG down; above it renal clearance does, at
 the UVA/Padova rate. An unbolused meal stays high for hours. With nothing but insulin to remove
 glucose and insulin blind to meals, the BG distribution is wide by construction:
-mean about 210 mg/dL, SD about 115, and roughly 12% of CGM time at the 400 ceiling,
-which the cache's rail filter discards. True BG has no
-floor and can go below zero; only the CGM reading is clipped.
+mean about 210 mg/dL, SD about 115, and roughly 12% of CGM time at the 400 ceiling.
+True BG has no floor and can go below zero; only the CGM reading is clipped.
 
 ## Stale artefacts on disk
 
