@@ -1,7 +1,6 @@
 # The inference contract
 
-*Binds: `T1DMAI` → `T1DMDROID`; its forecast layout is displayed by
-`T1DMSERVER`.*
+*Binds: `T1DMAI` → `T1DMDROID`.*
 
 A hardware- and framework-agnostic account of loading a trained T1DMAI checkpoint
 and producing a blood-glucose (BG) forecast — on CPU, GPU, NPU, mobile, or a
@@ -187,8 +186,8 @@ states, ahead of the spline; with no adapter the two paths agree, which is what 
 consumer checks at load. The `head` block carries the tensor order, the shapes, a
 sha256 over the exact bytes, and `decoder = "bspline-centre-nodes"` — the name of
 the rule in [§8.2](#82-the-step-state-spline); a consumer rejects a value it does
-not implement rather than assuming this one. A sidecar synced without the `head`
-block decodes `head_raw` alone and needs no decoder name.
+not implement rather than assuming this one. A sidecar without the `head` block
+decodes `head_raw` alone and needs no decoder name.
 
 `geometry.MAX_CONTEXT_PATCHES` is what the artifact accepts
 (`T − PREDICTION_PATCHES`), which a shorter export lowers;
@@ -696,8 +695,8 @@ export path ships none. Off device, `T1DMAI/conformal.py` fits and applies one
 delta and `T1DMAI/mondrian.py` bins it into a stack. On device, `T1DMDROID` fits a
 **marginal** per-patient delta from the patient's own matured forecasts — one
 `(step, τ)` correction, no region axis — and applies it to **display only**: the raw
-fan is what the alarm engine, the dose calculator, the accuracy suite, the
-`prediction` table and the wire all carry. Both implementations are bound by the
+fan is what the alarm engine, the dose calculator, the accuracy suite and the
+`prediction` table all carry. Both implementations are bound by the
 order-statistic rule above, and because both publish τ.05–.95 coverage under one
 name, neither may change it alone.
 

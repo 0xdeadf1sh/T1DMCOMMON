@@ -7,7 +7,7 @@ repository holds the specifications and rules the suite shares. The software
 lives in sibling checkouts, one directory up:
 
 ```
-../T1DMSIM      ../T1DMAI      ../T1DMDROID      ../T1DMSERVER
+../T1DMSIM      ../T1DMAI      ../T1DMDROID
 ```
 
 Before doing anything in a project, read, in this order:
@@ -26,8 +26,7 @@ Before doing anything in a project, read, in this order:
 | --- | --- | --- | --- |
 | `../T1DMSIM` | yes | — | `math.md` |
 | `../T1DMAI` | yes | — | `INFERENCE.md` → `SPEC/inference.md` |
-| `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`, `WATCH_BLE.md`; `INFERENCE.md` → `SPEC/inference.md`, `T1DMSERVER_API.md` → `SPEC/http-api.md` |
-| `../T1DMSERVER` | yes | — | `API.md` → `SPEC/http-api.md` |
+| `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`, `WATCH_BLE.md`; `INFERENCE.md` → `SPEC/inference.md` |
 
 `CGM.md` must **never** be promoted here, in any part: see *What must never enter
 this repository*.
@@ -70,14 +69,13 @@ Three cautions:
 - **Do not write a shared fact into a memory.** A memory is local, private and
   unversioned. A fact true for more than one project belongs in `SPEC/`.
 
-## The four repositories, and how they differ
+## The three repositories, and how they differ
 
-Two are **active** — running software in a live client/server relationship:
+One is **active** — running software that holds a patient's live record:
 
 | Repository | Role | Language |
 | --- | --- | --- |
 | `T1DMDROID` | The Android app. Reads the CGM, runs inference on device, owns the patient's data. | Kotlin + Rust |
-| `T1DMSERVER` | The sync backend. Stores what the app sends, holds sessions, fans out notifications, and renders an operator console. | Rust |
 
 Two are **passive** — offline tooling, run by hand, not part of any running
 system:
@@ -87,11 +85,10 @@ system:
 | `T1DMSIM` | Behavioural simulator. Generates the synthetic traces the model pretrains on. | Python |
 | `T1DMAI` | Training and ExecuTorch export. Produces the model artifact and its descriptor. | Python |
 
-This governs how strongly each shared fact binds. A disagreement between the two
-active repositories is a live defect: they exchange data continuously, and a
-mismatch corrupts or loses a patient record. A disagreement involving the passive
-repositories surfaces at the next training or export run, where a human is
-present.
+This governs how strongly each shared fact binds. A disagreement that reaches
+`T1DMDROID` at run time is a live defect: it misreads or misstores a patient
+record. One confined to the passive repositories surfaces at the next training or
+export run, where a human is present.
 
 ## The rule that matters
 
@@ -107,23 +104,21 @@ If a value, formula, or contract is defined under `SPEC/`, reference it. Do not
 restate it, re-derive it, or re-hardcode it. If you find an existing duplicate,
 report it rather than adding a third.
 
-**Specifications are single-copy, and that is checked.** `SPEC/invariants.md`,
-`SPEC/http-api.md` and `SPEC/inference.md` exist here and nowhere else. A project
-that needs one keeps a **stub** at the path its readers expect, naming this
-document, pointing at the sibling checkout, and carrying only what is local to
-that project. Never restore a copy: the app's copy of the wire contract had
-fallen a version behind the server's before anyone noticed.
+**Specifications are single-copy, and that is checked.** `SPEC/invariants.md` and
+`SPEC/inference.md` exist here and nowhere else. A project that needs one keeps a
+**stub** at the path its readers expect, naming this document, pointing at the
+sibling checkout, and carrying only what is local to that project. Never restore a
+copy.
 
 ```
 scripts/check-no-copies.sh          # 0 = clean, 1 = a copy exists
-scripts/check-contract.sh           # 0 = clean, 1 = a claim made here is false
 ```
 
 `check-no-copies.sh` fingerprints each specification with a handful of its own
-sentences and scans the four sibling checkouts, so it catches a copy under any
+sentences and scans the three sibling checkouts, so it catches a copy under any
 filename, and a specification pasted into a source comment as readily as into a
 document. Editing a fingerprinted sentence silently disarms that fingerprint —
-change the script in the same commit. Run both before you finish anything that
+change the script in the same commit. Run it before you finish anything that
 touched `SPEC/` or a project's `docs/`.
 
 ## Keeping this repository true
@@ -134,8 +129,7 @@ the next agent to change working code to match something no longer true.
 **Drift flows back here.** A change in a sister project that falsifies anything in
 this repository obliges an update to this repository, in the same task. That
 includes a `SPEC/` invariant the change contradicts, a `PROJECTS/` entry it
-outdates, a deviation it resolves, an open question it answers, and the
-`CONTRACT_VERSION` where the wire contract moved.
+outdates, a deviation it resolves, and an open question it answers.
 
 If the correction is not yours to make — you were asked to work in one repository
 and the truth now lives in another — say so explicitly and name the file and the
@@ -149,52 +143,18 @@ prose: describe the mechanism in place, not the one it replaced — unless the
 superseded design is still on disk and could be reached by mistake, in which case
 it is a live trap and belongs here as one.
 
-## What T1DMSERVER is, and is not
-
-The phone is authoritative. `T1DMDROID` authors every physiologic record and
-computes every forecast and statistic.
-
-The server **is** responsible for:
-
-- storing what it receives, verbatim and durably, and returning it unchanged
-- resolving bearer tokens and holding read-write and read-only sessions
-- fanning notifications out to every session except the one that wrote
-- its own operator console
-
-The server is **not** responsible for:
-
-- judging whether a physiologic value is plausible, correctly scaled, or sane
-- computing or recomputing any statistic or forecast
-- interpreting model metadata, which is opaque to it
-- re-stamping any timestamp the client authored
-
-**The boundary.** The server may reject input only where accepting it would
-corrupt its own storage or make a record unreachable — a timestamp off the grid
-it keys reconstruction on, a window label no reader could resolve. It must never
-reject input for being physiologically implausible. That is the client's
-judgement, and the server's job is to keep whatever the client decided.
-
-**The console is not the data path.** The server carries curve mathematics and a
-risk transform solely to render its own operator TUI. If they drift from the
-phone's, the operator sees a different picture than the patient — worth fixing,
-but no stored record is wrong. Never let a display convenience write back into
-stored data.
-
 ## Concepts governed by SPEC/
 
 Changing any of these in one repository obliges you to check its counterparts:
 
 | Concept | Written in | Binds |
 | --- | --- | --- |
-| The HTTP/WebSocket contract | `SPEC/http-api.md` | `T1DMDROID` ↔ `T1DMSERVER` — live, strongest |
-| The five-minute grid, timestamps, `tz_offset` | `SPEC/invariants.md` §1–2 | all four |
-| Physiologic units, scales, sign conventions | `SPEC/invariants.md` §3 | all four |
-| The two risk spaces | `SPEC/invariants.md` §4 | all four |
-| Meal-appearance and insulin-action curve mathematics | `SPEC/invariants.md` §5 | all four |
-| Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID`, displayed by `T1DMSERVER` |
+| The five-minute grid, timestamps, `tz_offset` | `SPEC/invariants.md` §1–2 | all three |
+| Physiologic units, scales, sign conventions | `SPEC/invariants.md` §3 | all three |
+| The two risk spaces | `SPEC/invariants.md` §4 | all three |
+| Meal-appearance and insulin-action curve mathematics | `SPEC/invariants.md` §5 | all three |
+| Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
 | The metric levels, band projection, CG-EGA anchoring | `SPEC/invariants.md` §6.1–6.3 | `T1DMAI` ↔ `T1DMDROID` |
-| Authority, `client_id`, `updated_at` ordering | `SPEC/invariants.md` §7 | `T1DMDROID` ↔ `T1DMSERVER` |
-| Statistics definitions | `SPEC/http-api.md` (Stats) | computed by `T1DMDROID`, displayed by `T1DMSERVER` |
 | The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
 | The conformal band correction — its apply AND its fit | `SPEC/inference.md` §8.4 | `T1DMAI` ↔ `T1DMDROID` |
 
@@ -203,7 +163,7 @@ Anything on that list is a cross-repository change. Read
 
 ## Safety stance
 
-All four projects are research artifacts and advisory only. None is a medical
+All three projects are research artifacts and advisory only. None is a medical
 device; none is clinically validated. No component may actuate insulin delivery.
 Every repository carries a disclaimer to this effect in its README — keep them
 consistent in substance, and never weaken one.

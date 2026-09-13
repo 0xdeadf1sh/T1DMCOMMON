@@ -1,26 +1,10 @@
 #!/usr/bin/env bash
-# Detect second copies of the specifications under SPEC/.
-#
-# A copy is how every divergence in this suite began: correct the day it was
-# made, silently wrong later. The specifications are single-copy by design, and
-# each consumer keeps a stub pointing here instead. This script looks for a
-# sibling file that reproduces one of them.
-#
-# It works on FINGERPRINTS, not filenames: a handful of sentences distinctive
-# enough that no independent document would carry several by accident. A file
-# matching THRESHOLD of them is reproducing that specification, whatever it
-# happens to be called. Prose is fingerprinted rather than constants, because a
-# constant legitimately appears in the code implementing it — a paragraph does
-# not.
-#
-# Usage:  scripts/check-no-copies.sh [sibling-root]     (default: the parent
-#         directory, in which the four sibling checkouts are expected)
-# Exit:   0 clean, 1 a copy was found, 2 could not run.
+# Fingerprint scan for copies of SPEC/ in the three siblings. Exit 0 clean, 1 copy, 2 no run.
 
 set -uo pipefail
 
 ROOT="${1:-..}"
-PROJECTS=(T1DMSIM T1DMAI T1DMDROID T1DMSERVER)
+PROJECTS=(T1DMSIM T1DMAI T1DMDROID)
 THRESHOLD=3
 
 TARGETS=()
@@ -34,13 +18,6 @@ PATDIR="$(mktemp -d)"
 trap 'rm -rf "$PATDIR"' EXIT
 
 # Each spec's fingerprints, one per line, matched as fixed strings.
-cat >"$PATDIR/http" <<'EOF'
-the constant tag `t1dm-login`
-is an opaque store-identity string
-carries no record and has no REST counterpart
-`ts`-keyed cursor could only either repeat or skip
-the marker of a never-pushed window
-EOF
 cat >"$PATDIR/inference" <<'EOF'
 Every tensor lives in exactly one of three spaces
 Patch flatten order is step-major
@@ -82,7 +59,6 @@ check_spec() {
 }
 
 printf 'Checking %s\n\n' "${TARGETS[*]}"
-check_spec 'SPEC/http-api.md'   "$PATDIR/http"
 check_spec 'SPEC/inference.md'  "$PATDIR/inference"
 check_spec 'SPEC/invariants.md' "$PATDIR/invariants"
 

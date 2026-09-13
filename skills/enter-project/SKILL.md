@@ -3,9 +3,9 @@ name: enter-project
 description: >-
   Run this FIRST, before any work on a T1DM sister project. The harness starts in T1DMCOMMON, which
   holds the suite's shared rules but none of its code — the projects are sibling checkouts at
-  ../T1DMSIM, ../T1DMAI, ../T1DMDROID and ../T1DMSERVER. This skill is the orientation ritual: which
+  ../T1DMSIM, ../T1DMAI and ../T1DMDROID. This skill is the orientation ritual: which
   files to read before touching a project, in what order, and what each project's local gates are.
-  Triggers: any request naming a sister project, "work on the app", "fix the server", "retrain",
+  Triggers: any request naming a sister project, "work on the app", "retrain",
   "the simulator", or any task whose files are not in T1DMCOMMON itself.
 ---
 
@@ -17,8 +17,8 @@ discover after a mistake.
 
 ## 1. Identify the project and confirm the path
 
-Map the request to exactly one of `../T1DMSIM`, `../T1DMAI`, `../T1DMDROID`,
-`../T1DMSERVER`. A request spanning two is a cross-repository change: read
+Map the request to exactly one of `../T1DMSIM`, `../T1DMAI`, `../T1DMDROID`. A
+request spanning two is a cross-repository change: read
 `shared-contract-change` as well, and still write to only one.
 
 `../T1DMDROID-vk-build` is a build variant sitting beside the real checkout, not
@@ -33,9 +33,9 @@ In order:
 - `../<PROJECT>/.claude/skills/*/SKILL.md` — at minimum every description
 - `../<PROJECT>/docs/` — the interface documentation relevant to the task
 
-All four projects carry a `CLAUDE.md`, and it holds the local rules this
+All three projects carry a `CLAUDE.md`, and it holds the local rules this
 repository deliberately does not: `T1DMDROID`'s two-branch and build-both
-discipline, `T1DMSERVER`'s manual gate. Skills bind separately; a project with
+discipline, for one. Skills bind separately; a project with
 none is still bound by `../CLAUDE.md` and `SPEC/`.
 
 ## 3. Note the local gates
@@ -53,8 +53,6 @@ Current at the time of writing — verify against the project:
   on the dose calculator), `rust-golden.yml` (bit-for-bit core vectors). Its
   `CLAUDE.md` adds a standing rule: build **both** branches, and install the
   release build on the phone when one is attached.
-- **`T1DMSERVER`** — no CI. Its gate is manual and stated in its own
-  `CLAUDE.md`. Run it before claiming a change works.
 
 ## 4. Check whether the task is shared
 

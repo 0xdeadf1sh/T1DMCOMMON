@@ -23,10 +23,9 @@ euglycaemic zero-risk centre sits near 128 mg/dL rather than 112.5.
 
 **Exercise is an input feature** — a carbohydrate-equivalent glucose-disposal
 curve in g/step, encoded log1p + z like carbohydrate, never risk-transformed and
-never rescaled. The simulator is its only source. The wire's `exercise` carries
-the same quantity, in grams of carbohydrate equivalent per bucket, which
-`T1DMDROID` writes from the patient's logged sessions against their own
-`carb_equiv_per_min`. Units and curve in `../SPEC/invariants.md` §3 and §5.
+never rescaled. The simulator is its only source. `T1DMDROID`'s `sample.exercise`
+carries the same quantity, in grams of carbohydrate equivalent per bucket, written
+from the patient's logged sessions against their own `carb_equiv_per_min`. Units and curve in `../SPEC/invariants.md` §3 and §5.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else

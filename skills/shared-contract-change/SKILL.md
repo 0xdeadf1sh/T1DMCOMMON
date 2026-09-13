@@ -1,14 +1,12 @@
 ---
 name: shared-contract-change
 description: >-
-  MANDATORY before changing anything the T1DM sister repositories share — the HTTP/WebSocket contract
-  between T1DMDROID and T1DMSERVER, the five-minute grid, tz_offset, physiologic units or scales,
-  either Kovatchev risk space, the curve mathematics, the quantile/circadian forecast layout, the
-  statistics definitions, or the model descriptor format. These concepts exist in more than one
-  repository, in more than one language, and drift between them is silent — both sides keep working
-  and one of them is wrong. Triggers: editing a wire DTO or handler, a serde or kotlinx annotation on
-  a wire type, curve.rs, units.rs, stats.rs, KovatchevRisk.kt, GridStamper.kt, the sync module, an
-  exporter, or any constant this document names.
+  MANDATORY before changing anything the T1DM sister repositories share — the five-minute grid,
+  tz_offset, physiologic units or scales, either Kovatchev risk space, the curve mathematics, the
+  quantile/circadian forecast layout, or the model descriptor format. These concepts exist in more
+  than one repository, in more than one language, and drift between them is silent — both sides
+  keep working and one of them is wrong. Triggers: editing curve.rs, units.rs, KovatchevRisk.kt,
+  GridStamper.kt, an exporter, or any constant this document names.
 ---
 
 # Changing something the suite shares
@@ -25,10 +23,10 @@ Read `SPEC/invariants.md` for the concept, then find **every** implementation of
 it. Do not assume there are two — the Kovatchev transform was found in six
 places across three repositories and three languages.
 
-Search all four sibling checkouts:
+Search all three sibling checkouts:
 
 ```
-rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID ../T1DMSERVER
+rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID
 ```
 
 List what was found before proceeding. A surprising count is itself the finding;
@@ -40,14 +38,10 @@ If `SPEC/` states the rule, amend it there before touching any implementation.
 If `SPEC/` does not state it yet, add it. An implementation change that leaves
 the spec stale has moved the drift rather than fixed it.
 
-`invariants.md`, `http-api.md` and `inference.md` are **single-copy**. Amend the
-original; never bring a copy back into a project, and never paste a changed
+`invariants.md` and `inference.md` are **single-copy**. Amend the original; never bring a copy back into a project, and never paste a changed
 section into a consumer's documentation. A project's `docs/` entry is a stub
 naming the specification and carrying only what is local to that project.
 `scripts/check-no-copies.sh` enforces this.
-
-A change to the wire contract between `T1DMDROID` and `T1DMSERVER` bumps
-`CONTRACT_VERSION` in the same commit and says what changed.
 
 Sweep the rest of `T1DMCOMMON` in the same pass: a `PROJECTS/` entry the change
 outdates, a known deviation it resolves, an open question it answers. Resolved
@@ -77,7 +71,6 @@ Then:
 
 ```
 scripts/check-no-copies.sh
-scripts/check-contract.sh
 ```
 
 ## 5. Report the seams you could not close

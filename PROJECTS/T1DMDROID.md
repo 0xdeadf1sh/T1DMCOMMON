@@ -1,8 +1,8 @@
 # T1DMDROID — working knowledge
 
-The Android client: reads the CGM, runs forecasting on device, owns the
-patient's data, syncs to `T1DMSERVER`, drives an optional BLE watch, and can
-mirror a subset outward — see *Outbound destinations*.
+The Android app: reads the CGM, runs forecasting on device, owns the patient's
+data, drives an optional BLE watch, and can mirror a subset outward — see
+*Outbound destinations*.
 
 Kotlin + Compose, multi-module Gradle, with a Rust core (`crates/t1dm-core`) over
 JNI. GPL-3.0. Sideload-only, never a store listing. Targets exactly one phone.
@@ -46,10 +46,10 @@ which the stock `executorch-android` AAR registers. No integer quantization. The
 seam that keeps the backend replaceable is still there, but `InferenceFactory`
 registers this one and `BackendId` carries no other executing path.
 
-**Only an `executorch_xnnpack` artifact reaches the device.** `ModelStore` refuses
-a descriptor declaring any other engine, and `ModelSyncCoordinator` syncs only that
-filename infix, so a model built for a delegate this runtime does not register is
-never downloaded and never loaded.
+**Only an `executorch_xnnpack` artifact loads.** `ModelStore` refuses a descriptor
+declaring any other engine, so a model built for a delegate this runtime does not
+register never loads. A model reaches the phone by `adb push` of its `.pte` and
+`descriptor.json` into the app's external-files `models/` directory.
 
 **There is no GPU or NPU inference.** The NeuroPilot runtime ships through Play
 feature delivery, which a sideload-only build cannot fetch, and the stock
@@ -80,7 +80,7 @@ core.
 
 **A reconstruction can be promoted into the record.** A stretch selected on the
 BG panel is reconstructed and drawn; a deliberate second action on the same panel
-writes it into `sample` and `cgm_reading` as a stored, syncable value,
+writes it into `sample` and `cgm_reading` as a stored value,
 permanently flagged `RECONSTRUCTED`. `../SPEC/invariants.md` §1 carries the narrow
 exception and what such a value may never do. Four consumers discriminate on the
 flag rather than trusting the column: the alarm path, which may only be cleared
@@ -139,8 +139,8 @@ state a second and narrower uncertainty beside a calibrated one. The sweep
 applies it in-sample to the rows the delta was fitted on, which §8.4's
 exchangeability argument does not cover — accepted, because nothing the sweep
 draws is read by anything. Every classifier — alarm
-engine, calculator rails, accuracy suite — reads the raw fan, the wire carries the
-raw fan, and the median never moves. A stored correction lapses one fitting
+engine, calculator rails, accuracy suite — reads the raw fan, the `prediction`
+table stores the raw fan, and the median never moves. A stored correction lapses one fitting
 window after it was made, and replacing the artifact under the same id drops the
 correction and the forecasts it was fitted on together.
 
@@ -177,9 +177,8 @@ invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
 
 ## Outbound destinations
 
-Three, and only the first is a contract:
+Two, and neither is a contract:
 
-- **`T1DMSERVER`** — the full record, both directions, `SPEC/http-api.md`.
 - **The Nightscout bridge** — one way, and only BG, carbohydrate and bolus, to a
   host speaking the Nightscout `/api/v1` subset. It sends whenever the user has
   configured a URL and a secret and left the switch on; nothing else gates it.
@@ -190,15 +189,10 @@ Three, and only the first is a contract:
   but the request discloses which tiles are being looked at, and a review of a
   recorded route is what that is a function of.
 
-The server record rides the durable outbox, distinguished by `OutboxKind`. A
-forecast does not: at contract `0.5.0` it goes up the WebSocket, nothing stores
-it, and a frame that finds no socket is lost rather than queued.
-
-Each destination drains its own FIFO lane, and a failure is confined to the lane
-that suffered it. A host that is off, unreachable, or rejecting its credential
-stands down only its own lane; neither lane can take the other's batch slots, so
-a backlog of older rows cannot starve the other destination. Eviction gives the
-bridge a reserved share of the queue, since it ranks below every server kind.
+The bridge rides the durable outbox: one FIFO queue, drained each pass up to a
+request budget, every row age- and size-evictable. A host that is off,
+unreachable, or rejecting its secret backs its rows off; nothing stands the queue
+down.
 
 Basal and exercise are withheld deliberately. Nightscout's basal is a **rate**
 where §3 makes ours an **amount**, and `exercise` is carbohydrate-equivalent
@@ -209,8 +203,7 @@ A bridged BG entry keys on the five-minute grid. A bridged **treatment does not*
 it carries the event's unsnapped `updatedAt`. Snapping put a meal and the bolus
 taken with it on one instant, and the host keys treatments by timestamp — so the
 second was acked `200` and silently discarded, losing a logged meal. Do not
-"restore" the grid here; the grid still governs the phone's own record and
-everything on the wire to `T1DMSERVER`.
+"restore" the grid here; the grid still governs the phone's own record.
 
 The `/api/v1` write has no idempotency key, so a lost acknowledgement can
 duplicate an upload. The phone narrows that window by reading back before a
@@ -301,16 +294,7 @@ launch or the dialog stalls the launch.
 
 **Do not type text into the app with `adb shell input text`.** It has a known IME
 race that drops or rotates the first character — `localhost` arriving as
-`ocalhostl`. Use the app's deeplink handler:
-
-```sh
-adb shell "am start -W -a android.intent.action.VIEW -d \
-  't1dmdroid://settings?host=…&port=…&token=…'"
-```
-
-The quoting is load-bearing: `&` separates commands on the device side, so the
-whole URL must sit inside single quotes that survive the trip through
-`adb shell`. Without that, only the first query parameter arrives.
+`ocalhostl`.
 
 **When the phone cannot reach the laptop over the network** — access-point
 isolation on public WiFi is the usual cause — pipe the connection down the USB
@@ -352,5 +336,5 @@ BLE peripheral emulator.
 - **Announce before any on-device sensor test** — it requires the vendor app to
   be shut off on the author's other phone.
 - Each phase runs as its own multi-agent workflow, by standing preference.
-- Never commit a server URL or token, a sensor serial, personal thresholds, or
+- Never commit a Nightscout URL or secret, a sensor serial, personal thresholds, or
   planning notes. Those belong in gitignored local configuration.

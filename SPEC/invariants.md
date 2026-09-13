@@ -7,16 +7,15 @@ correct without checking the other.
 Each invariant records which repositories it binds. `../CLAUDE.md` holds the
 active/passive distinction that governs how strongly.
 
-Two companion specifications apply these definitions to a particular seam and are
-equally normative: `http-api.md`, the wire contract between the app and the
-server, and `inference.md`, the model contract between the trainer and the app.
-All three are single-copy — see `../scripts/check-no-copies.sh`.
+A companion specification applies these definitions to a particular seam and is
+equally normative: `inference.md`, the model contract between the trainer and the
+app. Both are single-copy — see `../scripts/check-no-copies.sh`.
 
 ---
 
 ## 1. The five-minute grid
 
-*Binds: all four.*
+*Binds: all three.*
 
 Physiologic samples, meal events and dose events sit on a fixed five-minute grid
 in epoch milliseconds:
@@ -25,14 +24,10 @@ in epoch milliseconds:
 ts % 300000 == 0
 ```
 
-The **client snaps** a timestamp to the grid before sending it. The snapping rule
+`T1DMDROID` **snaps** a timestamp to the grid before storing it. The snapping rule
 is part of the contract: two implementations that floor where the other rounds
 both land on the grid and both pass every validation, while filing the same
 reading in different buckets.
-
-A server may reject an off-grid timestamp, because it keys reconstruction on the
-grid and an off-grid row is unreachable. That is storage self-defence, not
-validation of the client's judgement.
 
 Gaps are explicit. A grid slot with no measurement stores `NULL`; it is never
 back-filled at rest. Gap-filling is a presentation step, and a filled value must
@@ -40,11 +35,11 @@ never be written back as though measured.
 
 A slot is in one of three states: measured, empty, or tombstoned. A tombstone is
 a deletion the patient authored; it hides the row, is not a gap the sensor left,
-and must never be re-filled by a redelivery of the value it retired.
+and must never be re-filled by a restore of the value it retired.
 
-One narrow exception. A model-reconstructed value may be promoted to a stored,
-syncable sample by a deliberate user action, and only while it stays permanently
-flagged as reconstructed (`http-api.md`, `bg_reconstructed`). The flag is for
+One narrow exception. A model-reconstructed value may be promoted to a stored
+sample by a deliberate user action, and only while it stays permanently flagged as
+reconstructed. The flag is for
 life: such a value may never clear an alarm, never anchor or condition a dose
 recommendation, never be a fit target or a fit window's context, never count as
 measured context for a cold start or a warm-up, and never enter a statistic as a
@@ -52,7 +47,7 @@ measurement. A carry-forward or interpolated value gets no such route.
 
 ## 2. `tz_offset`
 
-*Binds: all four.*
+*Binds: all three.*
 
 `tz_offset` is the client's UTC offset **in minutes, east-positive**, at the time
 of the event. `UTC−5` is `-300`.
@@ -72,14 +67,14 @@ lag apart, so a constant offset cancels.
 
 ## 3. Units and sign conventions
 
-*Binds: all four.*
+*Binds: all three.*
 
 Storage units are fixed. Display conversion is presentation-only and never
 written back.
 
 | Quantity | Unit | Notes |
 | --- | --- | --- |
-| Blood glucose | mg/dL | The only BG unit that crosses the wire. See §4. |
+| Blood glucose | mg/dL | The only BG unit stored or sent. See §4. |
 | Carbohydrate | grams | |
 | Insulin | units | |
 | Basal slot dose | units **delivered in that slot** | Not a rate. Summing slots yields a daily total. |
@@ -107,7 +102,7 @@ nine: 100 mg/dL prints as `5.6` under 18.0 and `5.5` under 18.0182.
 
 ## 4. The two risk spaces
 
-*Binds: all four. The most easily conflated pair in the suite.*
+*Binds: all three. The most easily conflated pair in the suite.*
 
 Two Kovatchev parameterizations coexist **by design**. They are numerically
 similar, dimensionally incompatible, and must never be mixed.
@@ -189,12 +184,11 @@ and the rail-pinned degeneracy test alike. A rail-pin check against a fixed
    `kovatchev_f` without qualification is a defect.
 2. A value in one space is never compared to, stored as, or displayed as a value
    in the other.
-3. **Risk space never crosses the wire.** Every BG on the HTTP/WebSocket contract
-   — samples, prediction lines, quantile fans — is mg/dL. Decoding from model
-   space happens on the phone, before anything is sent.
+3. **Risk space never leaves the decode.** Every BG the phone stores, draws or
+   sends — samples, prediction lines, quantile fans — is mg/dL. Decoding from
+   model space happens on the phone, before anything is stored.
 4. Only `T1DMAI` (which trains and exports) and `T1DMDROID` (which decodes) have
-   any business with model space. `T1DMSERVER` has none: it displays clinical
-   risk in its console and never decodes a checkpoint.
+   any business with model space.
 5. **A descriptor and a model artifact are one unit.** They are coherent only if
    they come from the same export run, and nothing on device can check that: a
    stale descriptor beside a fresh artifact decodes finite, plausible, wrong.
@@ -202,7 +196,7 @@ and the rail-pinned degeneracy test alike. A rail-pin check against a fixed
 
 ## 5. Curve semantics
 
-*Binds: all four.*
+*Binds: all three.*
 
 A curve is a **per-five-minute rate series that sums to the event's total**. It is
 never an amount-in-body.
@@ -234,7 +228,7 @@ against a record written in the other measures an insulin nobody takes.
 
 The glycaemic index shapes the carbohydrate gamma rather than scaling it: a high
 GI concentrates the appearance into an early peak, a low GI spreads it. Defined
-here because `T1DMDROID` and `T1DMSERVER` each implement it:
+here because `T1DMDROID` and `T1DMAI`'s fine-tuning loader each implement it:
 
 ```
 g   = clamp(GI, 0, 100) / 100
@@ -270,7 +264,7 @@ Basal is auto-extended across the whole context and forecast window rather than
 treated as a discrete event, because background insulin is always present. Its
 Bateman rates are a modelling choice; only the duration of action is sourced.
 `T1DMSIM` emits glargine `ke = 0.058` or degludec `ke = 0.028` per patient;
-`T1DMDROID` and `T1DMSERVER` use `ka = 0.30, ke = 0.07` for every analogue.
+`T1DMDROID` uses `ka = 0.30, ke = 0.07` for every analogue.
 
 Both descriptions sum to the same total, so an implementation that places a whole
 bolus in the bucket it was injected in still reconciles against every daily
@@ -289,7 +283,7 @@ authoritative and is never re-derived from the parameters beside it.
 
 ## 6. Forecast layout
 
-*Binds: `T1DMAI` → `T1DMDROID`; displayed by `T1DMSERVER`.*
+*Binds: `T1DMAI` → `T1DMDROID`.*
 
 A prediction carries a median line, a seven-level quantile fan, and a twelve-bin
 circadian distribution with a confidence scalar.
@@ -299,8 +293,7 @@ quantile levels: 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95   (median at index 3)
 circadian bins:  12
 ```
 
-How the model produces this layout is `inference.md` §8; how it crosses the wire
-is `http-api.md` (Prediction).
+How the model produces this layout is `inference.md` §8.
 
 The **order** of the fan levels is part of the contract, and consumers index it
 positionally — the median is read at index 3, not searched for. A producer
@@ -315,7 +308,7 @@ must be stated, not inferred.
 
 *Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMAI` computes these metrics; a forecast
 scored on the phone keys off the same four levels, or the two accuracy figures
-are not comparable. `T1DMSERVER` scores nothing and reads no band edge.*
+are not comparable.*
 
 Two of the levels above carry four names — one pair for the level metrics, one
 for the excursion detectors:
@@ -355,11 +348,11 @@ against persistence — scores the band projection of §6.2.
 
 What the edge is compared *against* is the consumer's own hypo and hyper
 threshold: a fixed clinical pair in `T1DMAI`'s validation table, the patient's
-configurable bands on the phone (see *Accepted divergences* 3).
+configurable bands on the phone.
 
 ### 6.2 The band projection
 
-*Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMSERVER` scores nothing.*
+*Binds: `T1DMAI` ↔ `T1DMDROID`.*
 
 A forecast is a fan and not a line, so the effective point forecast the level
 metrics score is the band point nearest the truth:
@@ -393,7 +386,7 @@ without naming which basis yours is.
 
 ### 6.3 CG-EGA anchoring and window
 
-*Binds: `T1DMAI` ↔ `T1DMDROID`. `T1DMSERVER` scores nothing.*
+*Binds: `T1DMAI` ↔ `T1DMDROID`.*
 
 CG-EGA scores a point-error grid and a rate-of-change grid jointly, so it needs a
 step *before* the forecast's first step to difference against. That step is the
@@ -462,26 +455,7 @@ One consequence of §6.2: where the truth lies inside the band the projection
 *equals* the truth, so the rate term inherits the truth's own derivative there.
 The rate grid is scored only where the band actually missed.
 
-## 7. Authority and ordering
-
-*Binds: `T1DMDROID` ↔ `T1DMSERVER`.*
-
-The phone authors every physiologic record. Each carries a phone-minted
-`client_id`, stable for the life of the record, and an `updated_at` from the
-phone's clock which the server stores and returns **verbatim**, never re-stamping.
-
-`updated_at` is the ordering key for every idempotent upsert: a redelivery
-carrying an equal or older value is a no-op; a newer one replaces the record in
-place. This is what makes a durable outbox safe to retry and to deliver out of
-order. A deletion is an ordinary write carrying a tombstone, so it inherits that
-ordering and cannot be overtaken by a redelivery of the record it removes.
-
-If the phone's clock moves backwards, records it writes afterwards carry stamps
-older than what is stored and the server correctly ignores them. A backwards clock
-therefore freezes a record silently — and freezes a deletion the same way, leaving
-a record the patient deleted on every other screen.
-
-### 7.1 CGM source authority
+## 7. CGM source authority
 
 *Binds: `T1DMDROID`.*
 
@@ -490,12 +464,12 @@ are retained and the BG panel may be switched to it. Exactly one is also
 **authoritative**.
 
 The authoritative source is the sole input to the forecast, the statistics, the
-alarm engine and the wire. Another active source's readings reach nothing else.
+alarm engine and every outbound destination. Another active source's readings
+reach nothing else.
 
 Authority implies activity; the converse does not hold.
 
-A sample carries `bg_source` (`SPEC/http-api.md`), naming the sensor its `bg` came
-from. It is a label, not a key: one source is authoritative at a time, so a slot
+A sample carries `bg_source`, naming the sensor its `bg` came from. It is a label, not a key: one source is authoritative at a time, so a slot
 still holds one reading. A change in it between adjacent slots is a sensor change
 — except across a reconstructed slot, which carries no `bg_source` because no
 sensor produced it.
@@ -511,9 +485,8 @@ repository. An entry is **deleted** once the implementation agrees.
 1. **`T1DMDROID` clamps clinical risk to `[20, 500]`.** §4 fixes the clinical
    domain at `[20, 600]`; `CLINICAL_BG_CLAMP_MAX` in `crates/t1dm-core/src/lib.rs`
    is 500, and `KovatchevScale.kt` mirrors it for the display chrome that cannot
-   reach the JNI seam. `T1DMSERVER` clamps at 600, so the two render different
-   risk for the same high reading. The client's golden vectors pin the current
-   bound and need regenerating alongside the change.
+   reach the JNI seam. The client's golden vectors pin the current bound and need
+   regenerating alongside the change.
 
 ## Accepted divergences
 
@@ -524,31 +497,17 @@ them**; unifying them would be the defect.
    model-space constants beside them are both correct and serve different
    purposes. Never unify them.
 
-2. **The operator console renders any streamed fan as a confident forecast.**
-   `T1DMDROID` classifies degeneracy — non-finite, mis-ordered quantiles,
-   rail-pinned, collapsed band — and withholds a bad forecast from the patient.
-   That classification does not cross the wire, and the console does not derive
-   it. The console is an operator surface, not a patient-facing one.
-
-3. **Glycaemic thresholds are hardcoded in the console.** Its hypo/hyper rails and
-   in-range tinting are fixed at 70/180 mg/dL, while the phone's bands are
-   user-configurable and never cross the wire. The console's rails are fixed
-   reference lines, not a reflection of the patient's settings.
-
-4. **Two rapid-bolus curve families.** §5's gamma and exponential families coexist
+2. **Two rapid-bolus curve families.** §5's gamma and exponential families coexist
    by design: models are pretrained on the gamma, the phone's clinical presets
    author the exponential, and each preset declares `off_distribution: true`. A
    patient injects a named analogue, not the simulator's central values.
-   `T1DMSERVER` implements no exponential curve and renders a bolus from the
-   resolved `custom_curve` the phone sends; one arriving without it would be drawn
-   as a gamma.
 
 ## Open questions
 
 Each is a place where two implementations could diverge without either looking
 wrong.
 
-1. **Snapping rule.** §1 requires the client's snap to be specified as nearest,
+1. **Snapping rule.** §1 requires the phone's snap to be specified as nearest,
    floor, or ceiling. Confirm what `T1DMDROID` does and record it.
 
 2. **Circadian phase origin.** §6 requires the midnight bin to be named. Confirm
