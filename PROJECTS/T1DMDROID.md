@@ -192,17 +192,23 @@ Two, and neither is a contract:
 The bridge rides the durable outbox: one FIFO queue, drained each pass up to a
 request budget, every row age- and size-evictable. A host that is off,
 unreachable, or rejecting its secret backs its rows off; nothing stands the queue
-down.
+down. A BG row is due the moment it is written; a treatment waits out the
+withdrawal window an undo recalls it inside. A backlog is metered rather than
+burst: a third party is owed no flood, and the budget is what meters it.
 
 Basal and exercise are withheld deliberately. Nightscout's basal is a **rate**
 where §3 makes ours an **amount**, and `exercise` is carbohydrate-equivalent
 disposal whose sign is opposite a meal's. Either mapping misreports the record
-while looking plausible.
+while looking plausible. Relabelling does not rescue basal either: the host's IOB
+sums every treatment carrying an `insulin` field and never reads `eventType`, so
+a day's long-acting lands there as one rapid bolus.
 
-A bridged BG entry keys on the five-minute grid. A bridged **treatment does not**:
-it carries the event's unsnapped `updatedAt`. Snapping put a meal and the bolus
-taken with it on one instant, and the host keys treatments by timestamp — so the
-second was acked `200` and silently discarded, losing a logged meal. Do not
+Nothing bridged carries a grid timestamp. A BG entry carries the reading's
+unsnapped `measuredAtMs` — receipt on the passive path, the sensor's own sample
+clock on the connected one — and a treatment carries the event's unsnapped
+`updatedAt`. The host keys by timestamp and discards a collision with a `200`,
+and the grid manufactures collisions: it puts a meal and the bolus taken with it
+on one instant, and two readings contesting one slot on one `date`. Do not
 "restore" the grid here; the grid still governs the phone's own record.
 
 The `/api/v1` write has no idempotency key, so a lost acknowledgement can
