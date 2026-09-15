@@ -69,6 +69,8 @@ anchor, inverse transform and quantile assembly left to Rust. The exporter lives
 in `T1DMAI/exporters/`, and the **descriptor is the sole source** of pre/post
 constants — the app never parses a checkpoint pickle, and parses the descriptor
 in the shape the exporter writes rather than projecting it onto a second schema.
+The one value the app may replace is `BG_SHIFT`: a per-model override from the
+Models drill-down is written into the descriptor before the parse.
 `../SPEC/invariants.md` §4 says why those constants come from the descriptor.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
@@ -112,11 +114,9 @@ stored on the adapter's row. The refusal is structural rather than a disabled
 button, covers an adapter nobody measured as well as one that failed, and is
 overridable only by a deliberate second action that sticks to that row.
 
-Attaching or detaching an adapter drops that model's band correction and stored
-predictions — both described the forecaster that was there before. A
-channel-affecting edit or deletion of a logged meal or dose drops the same two
-from the other direction: those forecasts were conditioned on a history that no
-longer exists. The band correction goes only where the window it was fitted over
+Attaching or detaching an adapter keeps that model's band correction and stored
+predictions. A channel-affecting edit or deletion of a logged meal or dose drops
+both: those forecasts were conditioned on a history that no longer exists. The band correction goes only where the window it was fitted over
 reaches the change; a blanket drop would narrow the displayed band over a
 week-old correction, the wrong direction to fail in.
 

@@ -307,8 +307,8 @@ The symmetrizing transform whose risk-distance equates the clinical danger of a
 low and a high excursion. It is the (b) ↔ (c) bridge.
 
 ```
-f(g)     = SCALE · ( ln(g)^POWER − OFFSET )               # mg/dL -> risk
-f_inv(r) = exp( ( r/SCALE + OFFSET )^(1/POWER) )          # risk  -> mg/dL
+f(g)     = SCALE · ( ln(g + BG_SHIFT)^POWER − OFFSET )              # mg/dL -> risk
+f_inv(r) = exp( ( r/SCALE + OFFSET )^(1/POWER) ) − BG_SHIFT         # risk  -> mg/dL
 ```
 
 ### 5.1 Which parameterization, and where it comes from
@@ -320,9 +320,13 @@ never decodes a forecast.
 
 The model constants are **a property of the checkpoint**, not of the domain, and
 travel in the exported descriptor's `kovatchev` block: `SCALE`, `POWER`, `OFFSET`,
-`BG_CLAMP_MIN`, `BG_CLAMP_MAX`. Every (b)↔(c) crossing on the model path reads
-them from there — the BG input transform, the masked-patch anchors, and decoding
-`q_tau`/`median` back to mg/dL.
+`BG_CLAMP_MIN`, `BG_CLAMP_MAX`, and `BG_SHIFT`, which reads as 0 when absent. Every
+(b)↔(c) crossing on the model path reads them from there — the BG input transform,
+the masked-patch anchors, and decoding `q_tau`/`median` back to mg/dL.
+
+`BG_SHIFT` translates the curve along the BG axis: `f` at `g` is the unshifted `f`
+at `g + BG_SHIFT`. A consumer may let the user override it per model; the override
+passes the same guards as the exported value.
 
 A checkpoint re-anchored to a different physical BG range ships different
 constants, and decoding one against the other fails silently: the output stays
@@ -340,6 +344,8 @@ there is no safe constant to fall back to.
 Reproduce these to match the model at extremes. `BG_CLAMP_MIN`/`BG_CLAMP_MAX`
 below mean *the acting parameterization's* bounds.
 
+- The block is rejected unless `BG_CLAMP_MIN + BG_SHIFT > 1`: at or below it the
+  logarithm at the low rail is zero or undefined.
 - `f_inv`: first replace non-finite risk inputs (NaN/−inf → `f(BG_CLAMP_MIN)`,
   +inf → `f(BG_CLAMP_MAX)`), then **clamp the risk input** to
   `[f(BG_CLAMP_MIN), f(BG_CLAMP_MAX)]` (this keeps the base `r/SCALE + OFFSET ≥ 0`
@@ -812,6 +818,7 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 |---|---|
 | Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v5` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
 | `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v5` |
+| `BG_SHIFT` | **descriptor-carried**; absent reads `0`; a consumer may override it per model (§5.1) |
 | risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
