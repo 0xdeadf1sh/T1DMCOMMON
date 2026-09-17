@@ -27,11 +27,13 @@ Speed figures are machine-dependent, and a ratio can improve because the
 
 ## The dosing policy
 
-Bolus count, clock time and dose are drawn independent of meals, carbs and BG,
-so the insulin channel carries its own effect rather than a meal's shadow. It is a
-deliberate departure from every real patient; never justify it as realism. Most
-boluses with no meal carbs nearby fall in a meal-free night window. The only
-BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold.
+Scheduled bolus count, clock time and dose are drawn independent of meals, carbs
+and BG, so the insulin channel carries its own effect rather than a meal's shadow.
+It is a deliberate departure from every real patient; never justify it as realism.
+Most boluses with no meal carbs nearby fall in a meal-free night window.
+BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold and a
+correction bolus, taken with probability `HYPER_CORRECTION_PROBABILITY` on an
+awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
 
 Below 180 mg/dL only insulin brings BG down; above it renal clearance does, at
 the UVA/Padova rate. An unbolused meal stays high for hours. With nothing but insulin to remove
