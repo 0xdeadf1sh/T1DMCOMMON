@@ -350,8 +350,6 @@ BLE peripheral emulator.
 
 - The phone is a daily driver. It may be disconnected between tasks, never
   mid-task. Say plainly when it is about to be needed.
-- **Announce before any on-device sensor test** — it requires the vendor app to
-  be shut off on the author's other phone.
 - Each phase runs as its own multi-agent workflow, by standing preference.
 - Never commit a Nightscout URL or secret, a sensor serial, personal thresholds, or
   planning notes. Those belong in gitignored local configuration.
