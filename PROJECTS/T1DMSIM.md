@@ -38,7 +38,7 @@ awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
 Below 180 mg/dL only insulin brings BG down; above it renal clearance does, at
 the UVA/Padova rate. An unbolused meal stays high for hours. With nothing but insulin to remove
 glucose and insulin blind to meals, the BG distribution is wide by construction:
-mean about 210 mg/dL, SD about 115, and roughly 12% of CGM time at the 400 ceiling.
+mean about 177 mg/dL, SD about 114, and roughly 3% of CGM time at the 400 ceiling.
 True BG has no floor and can go below zero; only the CGM reading is clipped.
 
 ## Stale artefacts on disk

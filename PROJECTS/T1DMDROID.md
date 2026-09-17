@@ -175,7 +175,7 @@ The fail-closed architecture, load-bearing and not to be weakened:
   it blocks rather than silently doing nothing
 - a point-of-decision confirmation the user must acknowledge
 
-Guard-rail *toggles* exist (maximum bolus, IOB ceiling, predicted-low veto), but
+Guard-rail *toggles* exist (maximum bolus, bolus-IOB ceiling, predicted-low veto), but
 their thresholds are user-set and deliberately **unbounded** — the author
 explicitly overrode a proposed compiled ceiling. Advisory-only plus manual
 administration is the safety net. Respect that decision.

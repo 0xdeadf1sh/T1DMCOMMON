@@ -207,28 +207,51 @@ What the rate *is* differs by channel:
   gamma curve shaped by the glycaemic index, spread across the absorption window.
   Not the moment of eating.
 - **Insulin — PK action rate.** Units of action per bucket across the duration of
-  insulin action. A long-acting basal is a broad, near-flat Bateman curve running
-  twenty-four hours or more. A rapid bolus takes one of two shapes, and which one
-  must be stated alongside it. Not the injection instant, and not a delivery
-  schedule.
+  insulin action: a gamma curve for a rapid bolus, a Bateman curve for a
+  long-acting basal. Not the injection instant, and not a delivery schedule.
 - **Exercise — glucose disposal rate.** Grams of carbohydrate equivalent removed
   from the blood per bucket: a gamma curve spread across the session and the
   ninety minutes after it. Not the session's duration, intensity, or energy cost.
 
-A rapid bolus is drawn from one of two curve families:
+A gamma bucket carries the density `t^(k−1)·e^(−t/θ)` averaged over sixteen
+midpoints across its five minutes, from `t = 0`; a Bateman bucket carries
+`e^(−ke·t) − e^(−ka·t)` at its start, `t` in hours, with its last sixth tapered to
+zero by a smootherstep. Both are then scaled to sum to the total.
 
-| family | authored by | shape |
-| --- | --- | --- |
-| Gamma | `T1DMSIM`, and every model pretrained on it | peak `(k−1)·θ`; per-analogue parameters and `√dose` scaling of `θ` and DIA defined in `simulator.BOLUS_VARIANTS` / `bolus_pk_for_dose` |
-| Loop/OpenAPS exponential | `T1DMDROID`'s clinical presets | parameterized by `(peak, DIA)`; no dose scaling |
+A rapid bolus is a gamma curve whose `θ` and duration grow with the dose, about a
+5 U reference:
 
-Models are pretrained on the gamma family and run on the exponential one. Every
-clinical preset carries `off_distribution: true`. A metric that injects one family
-against a record written in the other measures an insulin nobody takes.
+```
+x   = √max(dose_U, 0.5) − √5
+θ   = θ₅ · (1 + 0.17 · x)
+dur = clamp(dur₅ + 0.8 · x, 2, 9)      # hours
+```
+
+| class | analogues | k | θ₅ (min) | dur₅ (h) |
+| --- | --- | --- | --- | --- |
+| rapid | aspart, lispro | 3.0 | 45.0 | 5.6 |
+| ultra-rapid | faster aspart, ultra-rapid lispro | 2.55 | 52.0 | 4.7 |
+
+`k` and `θ` fit the clamp glucose-infusion fractions at 1 h and 2 h after 0.2 U/kg
+(Heise 2015); the dose terms fit the per-dose peak and duration tables of the
+Fiasp and Lyumjev labels.
+
+A long-acting basal is a Bateman curve over its action window:
+
+| analogue | ka (1/h) | ke (1/h) | action (h) |
+| --- | --- | --- | --- |
+| glargine U100 | 0.477 | 0.0499 | 73 |
+| glargine U300 | 0.156 | 0.0377 | 101 |
+| degludec | 0.187 | 0.0277 | 133 |
+
+`ke` is the label half-life (13.9, 18.4, 25 h). `ka` puts the peak at 5.3 h for
+U100 — U300's half-AUC falls 3 h later at steady state (Becker 2015) — and 12 h
+for U300 and degludec. The window ends where 3% of the untruncated area remains.
 
 The glycaemic index shapes the carbohydrate gamma rather than scaling it: a high
-GI concentrates the appearance into an early peak, a low GI spreads it. Defined
-here because `T1DMDROID` and `T1DMAI`'s fine-tuning loader each implement it:
+GI concentrates the appearance into an early peak, a low GI spreads it. Every
+carbohydrate curve in the suite is drawn from it; `T1DMSIM` draws a GI per meal and
+gives every hypoglycaemia rescue GI 100:
 
 ```
 g   = clamp(GI, 0, 100) / 100
@@ -261,10 +284,7 @@ session by `0.10 · duration_min / 75`, capped at `0.30`. Folding that tail into
 the exercise channel counts it twice.
 
 Basal is auto-extended across the whole context and forecast window rather than
-treated as a discrete event, because background insulin is always present. Its
-Bateman rates are a modelling choice; only the duration of action is sourced.
-`T1DMSIM` emits glargine `ke = 0.058` or degludec `ke = 0.028` per patient;
-`T1DMDROID` uses `ka = 0.30, ke = 0.07` for every analogue.
+treated as a discrete event, because background insulin is always present.
 
 Both descriptions sum to the same total, so an implementation that places a whole
 bolus in the bucket it was injected in still reconciles against every daily
@@ -496,11 +516,6 @@ them**; unifying them would be the defect.
 1. **Two Kovatchev parameterizations.** The clinical constants of §4 and the
    model-space constants beside them are both correct and serve different
    purposes. Never unify them.
-
-2. **Two rapid-bolus curve families.** §5's gamma and exponential families coexist
-   by design: models are pretrained on the gamma, the phone's clinical presets
-   author the exponential, and each preset declares `off_distribution: true`. A
-   patient injects a named analogue, not the simulator's central values.
 
 ## Open questions
 
