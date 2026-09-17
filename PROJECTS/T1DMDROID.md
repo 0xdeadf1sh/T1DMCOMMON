@@ -148,6 +148,17 @@ correction and the forecasts it was fitted on together.
 forecaster without a descriptor and an artifact, so a device with no `.pte`
 publishes no forecast, and neither does the warm-up window.
 
+**A backtest scores a model on days it did not forecast.** The Models drill-down
+replays the last 1–14 days through one model as it runs now — offset, adapter,
+smoothing — one forecast per measured slot, each built from what the phone held
+when that reading arrived: readings by receipt, meals and doses by `loggedAtMs`,
+fills and promoted reconstructions by the fill's creation. Exercise is read as
+stored: `sample` keeps merged grams with no per-bout write time. The replayed
+forecasts are paired with realized BG by the stored forecasts' rule and scored by
+the same suite. Nothing is written to `prediction`; nothing reaches the band fit,
+the hindsight sweep, an alarm or a dose. An attached adapter scores in-sample on
+the days it was fitted on.
+
 ## Safety posture
 
 **Advisory only. The app never actuates insulin** — no pump, no closed loop. It
