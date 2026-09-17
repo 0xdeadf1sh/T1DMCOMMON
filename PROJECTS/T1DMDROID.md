@@ -69,8 +69,6 @@ anchor, inverse transform and quantile assembly left to Rust. The exporter lives
 in `T1DMAI/exporters/`, and the **descriptor is the sole source** of pre/post
 constants — the app never parses a checkpoint pickle, and parses the descriptor
 in the shape the exporter writes rather than projecting it onto a second schema.
-The one value the app may replace is `BG_SHIFT`: a per-model override from the
-Models drill-down is written into the descriptor before the parse.
 `../SPEC/invariants.md` §4 says why those constants come from the descriptor.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
