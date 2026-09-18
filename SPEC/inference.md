@@ -328,7 +328,8 @@ A checkpoint re-anchored to a different physical BG range ships different
 constants, and decoding one against the other fails silently: the output stays
 finite and plausible while being wrong by tens of mg/dL. `arch_version = risk-v5`
 is anchored on `[40, 400]` — `f(40) = −√10`, `f(400) = +√10` — while its clamp
-`[BG_CLAMP_MIN, BG_CLAMP_MAX]` is `[10, 400]`; the anchors are not the clamp.
+`[BG_CLAMP_MIN, BG_CLAMP_MAX]` runs lower at the floor; the anchors are not the
+clamp, and the acting pair is whatever the descriptor carries.
 Against the superseded `risk-v2` constants a true 55 mg/dL decodes as 32 and a
 true 300 as 394.
 
@@ -340,8 +341,9 @@ there is no safe constant to fall back to.
 Reproduce these to match the model at extremes. `BG_CLAMP_MIN`/`BG_CLAMP_MAX`
 below mean *the acting parameterization's* bounds.
 
-- The block is rejected unless `BG_CLAMP_MIN > 1`: at or below it the logarithm at
-  the low rail is zero or undefined.
+- The block is rejected unless `BG_CLAMP_MIN >= 1`: below it `ln` at the low rail
+  is negative and `ln(g)^POWER` is NaN for a fractional `POWER`. At exactly 1 the
+  round trip is total — `ln 1 = 0`, `0^(1/POWER) = 0`, `exp 0 = 1`.
 - `f_inv`: first replace non-finite risk inputs (NaN/−inf → `f(BG_CLAMP_MIN)`,
   +inf → `f(BG_CLAMP_MAX)`), then **clamp the risk input** to
   `[f(BG_CLAMP_MIN), f(BG_CLAMP_MAX)]` (this keeps the base `r/SCALE + OFFSET ≥ 0`

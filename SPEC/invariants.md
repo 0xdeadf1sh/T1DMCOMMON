@@ -148,9 +148,9 @@ SCALE = 2.2211457449985317   POWER = 1.084   OFFSET = 5.540076976170212
 ```
 
 The anchors are not the clamp. BG is clamped to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`,
-which the descriptor carries beside the constants and which currently reaches
-below the low anchor: at `[10, 400]` the realised risk range is asymmetric,
-`[f(10), f(400)] = [-6.8198, +3.1623]`. Never assume `±√10` bounds a risk value.
+which the descriptor carries beside the constants and whose low rail sits below
+the low anchor, so the realised risk range is asymmetric and reaches further
+below `−√10` than above `+√10`. Never assume `±√10` bounds a risk value.
 
 A consequence: the zero-risk centre moves from roughly 112.5 mg/dL in clinical
 space to roughly **128 mg/dL** in model space. The two transforms disagree about
