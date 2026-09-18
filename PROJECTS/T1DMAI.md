@@ -67,6 +67,17 @@ oversampling.
 checkpoint embeds its own copy, the authoritative z-space for those weights; the
 loose file is only what an untrained run needs.
 
+## Input layouts
+
+`train.py` and `finetune.py` take `--inputs curves|events`. `curves` is the
+layout `SPEC/inference.md` describes. `events` replaces the three action curves
+with `T1DMSIM/simulator.EVENT_CHANNELS` — each dose at its onset step with its GI
+or its minutes-to-peak and duration — read from a cache built with
+`cache_simulator.py --events`, whose `normalization_stats_events.json` is its
+statistics. A checkpoint is stamped `input_layout` and is one or the other. An
+`events` checkpoint does not export: the descriptor and the on-device feature
+builder are `curves` only.
+
 ## Checkpoints and metrics provenance
 
 A checkpoint is self-contained: it embeds the training configuration and
