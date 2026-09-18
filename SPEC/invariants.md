@@ -215,26 +215,26 @@ What the rate *is* differs by channel:
 
 A gamma bucket carries the density `t^(k−1)·e^(−t/θ)` averaged over sixteen
 midpoints across its five minutes, from `t = 0`; a Bateman bucket carries
-`e^(−ke·t) − e^(−ka·t)` at its start, `t` in hours, with its last sixth tapered to
-zero by a smootherstep. Both are then scaled to sum to the total.
+`e^(−ke·t) − e^(−ka·t)` at its start, `t` in hours, its first three hours eased in
+from zero by a smootherstep. Either curve has its last sixth tapered to zero by a
+smootherstep, then is scaled to sum to the total.
 
 A rapid bolus is a gamma curve whose `θ` and duration grow with the dose, about a
 5 U reference:
 
 ```
 x   = √max(dose_U, 0.5) − √5
-θ   = θ₅ · (1 + 0.17 · x)
-dur = clamp(dur₅ + 0.8 · x, 2, 9)      # hours
+θ   = θ₅ · (1 + 0.06 · x)
+dur = clamp(dur₅ + 0.6 · x, 2, 7.5)    # hours
 ```
 
 | class | analogues | k | θ₅ (min) | dur₅ (h) |
 | --- | --- | --- | --- | --- |
-| rapid | aspart, lispro | 3.0 | 45.0 | 5.6 |
-| ultra-rapid | faster aspart, ultra-rapid lispro | 2.55 | 52.0 | 4.7 |
+| rapid | aspart, lispro | 3.0 | 30.0 | 4.0 |
+| ultra-rapid | faster aspart, ultra-rapid lispro | 2.55 | 35.0 | 3.4 |
 
-`k` and `θ` fit the clamp glucose-infusion fractions at 1 h and 2 h after 0.2 U/kg
-(Heise 2015); the dose terms fit the per-dose peak and duration tables of the
-Fiasp and Lyumjev labels.
+The bolus rows are not fitted to clamp data; they act earlier than clamp
+glucose-infusion rates.
 
 A long-acting basal is a Bateman curve over its action window:
 
