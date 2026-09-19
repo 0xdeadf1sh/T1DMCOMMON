@@ -41,6 +41,14 @@ glucose and insulin blind to meals, the BG distribution is wide by construction:
 mean about 177 mg/dL, SD about 114, and roughly 3% of CGM time at the 400 ceiling.
 True BG has no floor and can go below zero; only the CGM reading is clipped.
 
+## The carbohydrate log
+
+On the `old-sim` branch the exported carbohydrate is the patient's log, not what
+they ate. `total_carb` and the `carb_g` / `carb_gi` events carry guessed grams and
+a guessed GI at the true onset step; a meal logs the carb count its bolus is dosed
+from. Blood glucose runs on `total_carb_true`, which the cache does not store.
+Insulin and exercise are exact.
+
 ## Stale artefacts on disk
 
 `diff/README.md`, `diff/stats.json` and the `uva_padova/` reports predate the
