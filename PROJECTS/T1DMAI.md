@@ -21,11 +21,10 @@ euglycaemic zero-risk centre sits near 128 mg/dL rather than 112.5.
 **Position comes from RoPE alone.** No additive per-head distance bias and no
 `alibi_slopes` tensor. QK-norm on Q and K stays.
 
-**Exercise is an input feature** — a carbohydrate-equivalent glucose-disposal
-curve in g/step, encoded log1p + z like carbohydrate, never risk-transformed and
-never rescaled. The simulator is its only source. `T1DMDROID`'s `sample.exercise`
-carries the same quantity, in grams of carbohydrate equivalent per bucket, written
-from the patient's logged sessions against their own `carb_equiv_per_min`. Units and curve in `../SPEC/invariants.md` §3 and §5.
+**The model consumes no exercise.** Nothing produces, normalizes, exports, plots
+or scores the channel. `../SPEC/inference.md` §6 holds the input the model does
+take, and what carbohydrate and insulin mean there — the patient's guess and the
+dose they injected, not the physiology.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else
@@ -45,6 +44,14 @@ position input, and nothing about the spline is stored in the checkpoint. The DI
 shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
 node rule, the coordinate and the weights.
 
+**An auxiliary head predicts the patient's skills.** Mean-pool of the trunk
+output after `final_norm` over the visible non-pad context patches, a small MLP,
+four sigmoids, in `../SPEC/cache.md` §6's column order. MSE against `skills.npy`
+at a small configured weight, added outside the selection loss like the
+hour-of-day probe; a sample carrying no skills contributes zero. The forward
+returns it only when a flag asks, so the existing return is unchanged, and neither
+the ExecuTorch export nor the descriptor carries it.
+
 **Configured capacity** — `D_MODEL` 32, `N_LAYERS` 32, `N_HEADS` 1, set through
 `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
 `../SPEC/inference.md`.
@@ -58,6 +65,15 @@ flag the duplication as drift — it is not.** Model risk space only.
 T1DMAI's own cache builder is gone; it relies on
 `../T1DMSIM/cache_simulator.py` (symlinked as `T1DMSIM/`) to build the blosc2
 cache, which also emits `normalization_stats.json` beside `meta.json`.
+`../SPEC/cache.md` is that cache's contract, and the loader gates on its
+`meta.json` keys rather than on a simulated-hours constant of its own.
+
+**A training sample is one arm of one row.** The context is a random 168–336
+patches cropped from the right end of the row, the arm is drawn uniformly, that
+arm's tail doses are the horizon input and that arm's tail BG is the target. The
+only dose inside the horizon is the one at its first step, on top of the curves
+carried over the boundary. There is one row builder, `T1DMSIM`'s, and a training
+run that simulates rather than reads the cache calls it rather than a copy.
 
 **Regenerate normalization statistics from the actual training cache**, not from
 a re-simulation — the re-simulate path skips the cache's hypoglycemia
@@ -70,13 +86,14 @@ loose file is only what an untrained run needs.
 ## Input layouts
 
 `train.py` and `finetune.py` take `--inputs curves|events`. `curves` is the
-layout `SPEC/inference.md` describes. `events` replaces the three action curves
-with `T1DMSIM/simulator.EVENT_CHANNELS` — each dose at its onset step with its GI
-or its minutes-to-peak and duration — read from a cache built with
-`cache_simulator.py --events`, whose `normalization_stats_events.json` is its
-statistics. A checkpoint is stamped `input_layout` and is one or the other. An
-`events` checkpoint does not export: the descriptor and the on-device feature
-builder are `curves` only.
+layout `../SPEC/inference.md` describes: `bg_absolute`, `carb_intake`,
+`insulin_combined` and the mask bit. `events` replaces the two action curves with
+the eight point-dose channels — `carb_g`, `carb_gi`, `bolus_u`, `bolus_peak_min`,
+`bolus_dur_h`, `basal_u`, `basal_peak_min`, `basal_dur_h`, each dose at its onset
+step — read from a cache built with `cache_simulator.py --events`, whose
+`normalization_stats_events.json` is its statistics. A checkpoint is stamped
+`input_layout` and is one or the other. An `events` checkpoint does not export:
+the descriptor and the on-device feature builder are `curves` only.
 
 ## Checkpoints and metrics provenance
 
