@@ -76,6 +76,8 @@ branch built it.
 randomised dosing policy and describe a different simulator. Regenerating them
 needs the three real datasets and simglucose, neither of which is on this machine.
 The comparison mechanism stays and still reads `diff/stats.json`.
+Its `datasets.Sim` mean of 162.9 mg/dL is the pre-retune simulator, so
+`DATASET.md` reports a gap near −38 mg/dL against a fresh pool's ~125 mg/dL.
 `tests/test_hypo_oversample.py` pins no number against that baseline: it asserts
 the section renders when a baseline is present, is omitted when it is not, and
 that an oversampled pool shifts against an unbiased one built in the same run.
