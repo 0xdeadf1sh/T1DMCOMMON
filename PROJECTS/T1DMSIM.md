@@ -63,16 +63,24 @@ carry the intended dose, before the injection-site factor. A meal logs the carb
 count its bolus is dosed from. Blood glucose runs on the `*_true` keys, which the
 cache does not store. `../SPEC/cache.md` §4 is the rule.
 
-`main` and `old-sim` predate the split and export true series under some of those
-same names — a trap, since nothing about a row's shape says which branch built it.
+`main` predates both splits and exports true carbohydrate and true insulin under
+those names. `old-sim` has the carbohydrate split — `_logged_carb` and
+`total_carb_true` are both there — and not the insulin one, so its
+`total_insulin` is the delivered dose. Nothing about a row's shape says which
+branch built it.
 
 ## Stale artefacts on disk
 
 `diff/README.md`, `diff/stats.json` and the `uva_padova/` reports predate the
 randomised dosing policy and describe a different simulator. Regenerating them
 needs the three real datasets and simglucose, neither of which is on this machine.
-The comparison mechanism stays and still reads `diff/stats.json`; no test requires
-that baseline to match the population as it is tuned now.
+The comparison mechanism stays and still reads `diff/stats.json`.
+`tests/test_hypo_oversample.py::test_unbiased_build_sits_near_baseline` pins a
+fresh unbiased pool within 12 mg/dL of that baseline's 162.9 mg/dL mean and
+within 0.05 of its hypoglycaemia fraction. Its fixture errors first, on the
+`exercise_equiv` std=0 cache build, so the 38 mg/dL gap to the retuned
+population only surfaces once exercise is gone; the test needs decoupling from
+the baseline in the same task.
 
 The population is tuned against one real CGM record rather than the public
 cohorts, so a figure quoted from those reports describes neither.
