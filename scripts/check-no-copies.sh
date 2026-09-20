@@ -36,7 +36,7 @@ It moves the warm-up, never the simulator clock
 arm 0 is bit-identical to an untouched
 What the model sees is the patient's record, not the physiology
 is never rejected, whatever it does
-the geometry is in the cache, not in a constant the reader holds
+geometry is in the cache, not in a constant the reader holds
 EOF
 
 # One recursive pass per spec. --include keeps it to text the suite authors;

@@ -468,9 +468,9 @@ A masked patch withholds its BG and announces that it did:
 
 - **feat 0 (BG): 0** — it is what the model predicts.
 - **feat 3 (`bg_masked`): 1** in all `PATCH_SIZE` step-major columns of that
-  patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a masked
-  BG slot is an ordinary reading, not a sentinel — the masked set is announced,
-  never inferred.
+  patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a
+  masked BG slot is an ordinary reading rather than a sentinel:
+  the masked set is announced, never inferred.
 - **feats 1–2 (carb / insulin): the announced plan.** A masked context patch keeps
   its observed values. A future patch takes the no-event baseline `normalize(0)`
   per channel. A literal `z = 0` routes through the sparse `log1p` inverse and

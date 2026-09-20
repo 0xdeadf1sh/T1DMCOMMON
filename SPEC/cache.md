@@ -22,8 +22,8 @@ One row is one patient on the five-minute grid:
 4 paired tails of 24 steps              # 2 h per arm, behaviour OFF
 ```
 
-The extra warm-up offset lands the boundary on a uniform hour of day. It moves
-the warm-up, never the simulator clock.
+The extra warm-up offset lands the boundary on a uniform hour of day.
+It moves the warm-up, never the simulator clock.
 
 The context ends **at the boundary**, so a consumer taking fewer than 336 patches
 crops from the right end of the row.
