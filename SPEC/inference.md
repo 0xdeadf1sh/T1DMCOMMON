@@ -379,9 +379,11 @@ statistics, no encoding.
 5-min step**, with basal and bolus already **summed** into the single channel. One
 timestep = 5 min; one patch = 6 steps = 30 min.
 
-Carbohydrate and insulin are the **patient's own record** — guessed grams, and the
-dose the patient injected — never the physiology the simulator ran on
-(`cache.md` §4). Exercise is not a model input: `T1DMDROID` records it,
+Carbohydrate and insulin are the **patient's own record** — the grams they
+guessed and the dose they injected — and never a corrected or absorbed quantity.
+The training corpus is built on the same rule (`cache.md` §4), so a consumer that
+feeds true grams or delivered units feeds a channel the model never saw.
+Exercise is not a model input: `T1DMDROID` records it,
 `invariants.md` §3 and §5 fix its unit and its curve, and no model consumes it.
 
 **normalize (raw → z):**
