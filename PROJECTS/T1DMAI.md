@@ -57,7 +57,7 @@ hour-of-day probe; a sample carrying no skills contributes zero. The forward
 returns it only when a flag asks, so the existing return is unchanged, and neither
 the ExecuTorch export nor the descriptor carries it.
 
-**Configured capacity** — `D_MODEL` 32, `N_LAYERS` 32, `N_HEADS` 1, set through
+**Configured capacity** — `D_MODEL` 16, `N_LAYERS` 16, `N_HEADS` 1, set through
 `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
 `../SPEC/inference.md`.
 
@@ -70,8 +70,11 @@ flag the duplication as drift — it is not.** Model risk space only.
 T1DMAI's own cache builder is gone; it relies on
 `../T1DMSIM/cache_simulator.py` (symlinked as `T1DMSIM/`) to build the blosc2
 cache, which also emits `normalization_stats.json` beside `meta.json`.
-`../SPEC/cache.md` is that cache's contract, and the loader gates on its
-`meta.json` keys rather than on a simulated-hours constant of its own.
+`../SPEC/cache.md` is that cache's contract, and `../SPEC/cache.md` §6 has the
+loader gate on its `meta.json` geometry keys. `data.py` instead holds
+`ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
+from it — a live deviation, and `docs/` carries `COMPARISON.md` and
+`INFERENCE.md` but no stub naming the cache contract.
 
 **A training sample is one arm of one row.** The context is a random 168–336
 patches cropped from the right end of the row, the arm is drawn uniformly, that
