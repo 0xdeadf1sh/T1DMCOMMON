@@ -15,15 +15,9 @@ it — the 2016-step context, the four behaviour-off tails, the `tail_` and
 `docs/math.md` and both cache tests name `cache.md` by path, so an agent entering
 by the repository's own files reaches the contract.
 
-**The simulator still exercises its patients, and the specification binds that
-channel to `T1DMDROID` alone — a live deviation.** `simulator.py` carries
-`EXERCISE_DURATION_MEAN_MIN`, `EXERCISE_CARB_EQUIV_PER_MIN`, the
-`exercise_duration_mean_min` patient field, the `exercise_min` event channel, the
-`total_exercise` step key and the post-exercise sensitivity reduction;
-`cache_simulator.py` caches `total_exercise` and normalizes it as
-`exercise_equiv`. `../SPEC/inference.md` §6 takes exercise out of the model
-input, and `../SPEC/invariants.md` §3 and §5 keep the unit and the curve for
-`T1DMDROID` alone. Removing all of it from here is a task of its own.
+Patients here never exercise: no constant, patient field, event channel, step key
+or normalized channel for it. `../SPEC/invariants.md` §3 and §5 keep the unit and
+the curve for `T1DMDROID` alone.
 
 ## Reading the comparison artefacts
 
@@ -53,10 +47,9 @@ awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
 
 Insulin is not the only thing that brings BG down: the insulin-independent
 glucose-effectiveness pull toward the equilibrium runs at every step and
-dominates below `RENAL_THRESHOLD`, and exercise subtracts its disposal. Above
-that threshold `RENAL_CLEARANCE_RATE` excretes glucose on top, at a damping tune
-carrying a `[DAMP]` tag, not the UVA/Padova value. An unbolused meal stays high
-for hours. The population is tuned
+dominates below `RENAL_THRESHOLD`. Above that threshold `RENAL_CLEARANCE_RATE`
+excretes glucose on top, at a damping tune carrying a `[DAMP]` tag, not the
+UVA/Padova value. An unbolused meal stays high for hours. The population is tuned
 tight all the same: seeds 1000–1011 over 168 h each, after a 48 h warm-up, put
 `bg_observed` near a 125 mg/dL mean with an SD near 40, about 5% below 70 mg/dL,
 about 86% in 70–180, and no time at the 400 ceiling.
@@ -83,12 +76,9 @@ branch built it.
 randomised dosing policy and describe a different simulator. Regenerating them
 needs the three real datasets and simglucose, neither of which is on this machine.
 The comparison mechanism stays and still reads `diff/stats.json`.
-`tests/test_hypo_oversample.py::test_unbiased_build_sits_near_baseline` pins a
-fresh unbiased pool within 12 mg/dL of that baseline's 162.9 mg/dL mean and
-within 0.05 of its hypoglycaemia fraction. Its fixture errors first, on the
-`exercise_equiv` std=0 cache build, so the 38 mg/dL gap to the retuned
-population only surfaces once exercise is gone; the test needs decoupling from
-the baseline in the same task.
+`tests/test_hypo_oversample.py` pins no number against that baseline: it asserts
+the section renders when a baseline is present, is omitted when it is not, and
+that an oversampled pool shifts against an unbiased one built in the same run.
 
 The population is tuned against one real CGM record rather than the public
 cohorts, so a figure quoted from those reports describes neither.
