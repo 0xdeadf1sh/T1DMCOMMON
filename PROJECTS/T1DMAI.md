@@ -49,14 +49,6 @@ position input, and nothing about the spline is stored in the checkpoint. The DI
 shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
 node rule, the coordinate and the weights.
 
-**An auxiliary head predicts the patient's skills.** Mean-pool of the trunk
-output after `final_norm` over the visible non-pad context patches, a small MLP,
-four sigmoids, in `../SPEC/cache.md` §6's column order. MSE against `skills.npy`
-at a small configured weight, added outside the selection loss like the
-hour-of-day probe; a sample carrying no skills contributes zero. The forward
-returns it only when a flag asks, so the existing return is unchanged, and neither
-the ExecuTorch export nor the descriptor carries it.
-
 **Configured capacity** — `D_MODEL` 16, `N_LAYERS` 16, `N_HEADS` 1, set through
 `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
 `../SPEC/inference.md`.
@@ -70,18 +62,17 @@ flag the duplication as drift — it is not.** Model risk space only.
 T1DMAI's own cache builder is gone; it relies on
 `../T1DMSIM/cache_simulator.py` (symlinked as `T1DMSIM/`) to build the blosc2
 cache, which also emits `normalization_stats.json` beside `meta.json`.
-`../SPEC/cache.md` is that cache's contract, and its §6 has the loader gate on
-the `meta.json` geometry keys. `data.py` instead holds
-`ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
-from it — a live deviation, and `docs/` carries `COMPARISON.md` and
-`INFERENCE.md` but no stub naming the cache contract.
+`../SPEC/cache.md` is that cache's contract.
 
-**A training sample is one arm of one row.** The context is a random 168–336
-patches cropped from the right end of the row, the arm is drawn uniformly, that
-arm's tail doses are the horizon input and that arm's tail BG is the target. The
-only dose inside the horizon is the one at its first step, on top of the curves
-carried over the boundary. There is one row builder, `T1DMSIM`'s, and a training
-run that simulates rather than reads the cache calls it rather than a copy.
+**Nothing here reads that contract — a live deviation.** `data.py` holds
+`ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
+from it, where §6 gates on the `meta.json` geometry keys; it samples a window
+anywhere in a whole trajectory, with no arm, no tail and no reader of
+`skills.npy`, where §1 and §6 make a sample one arm of one row — a right-end
+context crop, the arm drawn uniformly, that arm's tail doses the horizon input
+and its tail BG the target; and its simulating path runs a local
+`simulate_discard_warmup` rather than `T1DMSIM`'s row builder. `docs/` carries
+`COMPARISON.md` and `INFERENCE.md` but no stub naming the cache contract.
 
 **Regenerate normalization statistics from the actual training cache**, not from
 a re-simulation — the re-simulate path skips the cache's hypoglycemia
@@ -93,13 +84,15 @@ loose file is only what an untrained run needs.
 
 ## Input layouts
 
-`train.py` and `finetune.py` take `--inputs curves|events`. `curves` is the
-layout `../SPEC/inference.md` describes: `bg_absolute`, `carb_intake`,
-`insulin_combined` and the mask bit. `events` replaces the two action curves with
-the eight point-dose channels — `carb_g`, `carb_gi`, `bolus_u`, `bolus_peak_min`,
-`bolus_dur_h`, `basal_u`, `basal_peak_min`, `basal_dur_h`, each dose at its onset
-step — read from a cache built with `cache_simulator.py --events`, whose
-`normalization_stats_events.json` is its statistics. A checkpoint is stamped
+`train.py` and `finetune.py` take `--inputs curves|events`. `curves` is
+`bg_absolute`, `carb_intake`, `insulin_combined`, `exercise_equiv` and the mask
+bit; `events` replaces the two action curves with `T1DMSIM`'s nine point-dose
+channels — `carb_g`, `carb_gi`, `bolus_u`, `bolus_peak_min`, `bolus_dur_h`,
+`basal_u`, `basal_peak_min`, `basal_dur_h`, `exercise_min`, each dose at its
+onset step — read from a cache built with `cache_simulator.py --events`, whose
+`normalization_stats_events.json` is its statistics. `normalization.py` pins the
+normalized counts at 4 and 10, `../SPEC/inference.md` §6 at 3 and 9 — the
+exercise deviation above. A checkpoint is stamped
 `input_layout` and is one or the other. An `events` checkpoint does not export:
 the descriptor and the on-device feature builder are `curves` only.
 
