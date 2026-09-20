@@ -31,6 +31,13 @@ the zero-risk centre moves from roughly
 Summing is the invariant; the shape is the meaning
 A grid slot with no measurement stores
 EOF
+cat >"$PATDIR/cache" <<'EOF'
+It moves the warm-up, never the simulator clock
+arm 0 is bit-identical to an untouched
+What the model sees is the patient's record, not the physiology
+is never rejected, whatever it does
+the geometry is in the cache, not in a constant the reader holds
+EOF
 
 # One recursive pass per spec. --include keeps it to text the suite authors;
 # --exclude-dir keeps build output, VCS metadata and artifacts out of the walk.
@@ -61,6 +68,7 @@ check_spec() {
 printf 'Checking %s\n\n' "${TARGETS[*]}"
 check_spec 'SPEC/inference.md'  "$PATDIR/inference"
 check_spec 'SPEC/invariants.md' "$PATDIR/invariants"
+check_spec 'SPEC/cache.md'      "$PATDIR/cache"
 
 if [ $fail -ne 0 ]; then
   cat <<'EOF'
