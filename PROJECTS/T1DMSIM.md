@@ -10,9 +10,15 @@ cache, and emits the normalization statistics that pipeline consumes.
 `../SPEC/cache.md` is that cache's contract: row geometry, the four
 counterfactual tails, the arrays and the meta keys.
 
-**Patients never exercise.** The simulator carries no exercise constant, field,
-curve, channel or event. `T1DMDROID` still records exercise; `../SPEC/invariants.md`
-§3 and §5 hold the unit and the curve it builds.
+**The simulator still exercises its patients, and the specification has no such
+channel — a live deviation.** `simulator.py` carries
+`EXERCISE_DURATION_MEAN_MIN`, `EXERCISE_CARB_EQUIV_PER_MIN`, the
+`exercise_duration_mean_min` patient field, the `exercise_min` event channel, the
+`total_exercise` step key and the post-exercise sensitivity reduction;
+`cache_simulator.py` caches `total_exercise` and normalizes it as
+`exercise_equiv`. `../SPEC/inference.md` §6 takes exercise out of the model
+input, and `../SPEC/invariants.md` §3 and §5 keep the unit and the curve for
+`T1DMDROID` alone. Removing all of it from here is a task of its own.
 
 ## Reading the comparison artefacts
 
