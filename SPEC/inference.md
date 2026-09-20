@@ -119,7 +119,7 @@ Merge the EMA shadow over the live weights, then load:
 sd     = ckpt["model_state_dict"]
 ema    = ckpt.get("model_ema_state_dict")
 merged = {k: ema.get(k, v) for k, v in sd.items()} if ema else dict(sd)
-model.load_state_dict(merged, strict=False)   # strict=False tolerates the aux time_head
+model.load_state_dict(merged, strict=False)   # strict=False tolerates the aux heads
 model.eval()
 ```
 
@@ -129,8 +129,10 @@ For distribution, drop `muon_optimizer_state_dict`, `adam_optimizer_state_dict`,
 `weighting_state_dict` and all telemetry; that shrinks the file to roughly the
 model size. Keep the EMA weights (or a pre-merged state dict),
 `normalization_stats`, and enough of `training_config` (or the shapes) to rebuild
-the graph. The `time_head.*` weights are a diagnostic hour-of-day probe that never
-touches the BG forecast and may be dropped.
+the graph. Two auxiliary heads never touch the BG forecast and may be dropped:
+`time_head.*`, an hour-of-day probe, and `skill_head.*`, the four patient skills
+in `cache.md` §6's column order. Neither is exported, and neither appears in the
+descriptor.
 
 ---
 
@@ -379,10 +381,13 @@ statistics, no encoding.
 5-min step**, with basal and bolus already **summed** into the single channel. One
 timestep = 5 min; one patch = 6 steps = 30 min.
 
-Carbohydrate and insulin are the **patient's own record** — the grams they
-guessed and the dose they injected — and never a corrected or absorbed quantity.
-The training corpus is built on the same rule (`cache.md` §4), so a consumer that
-feeds true grams or delivered units feeds a channel the model never saw.
+Both are curves in the sense `invariants.md` §5 fixes: carbohydrate is the
+appearance rate, insulin the PK action rate, neither the eating or injection
+instant. What each curve **sums to** is the **patient's own record** — the grams
+they guessed and the dose they injected — never a corrected total and never the
+delivered amount. The training corpus is built to the same rule (`cache.md` §4),
+so a curve summing to true grams or to delivered units, and a spike at the
+logging step, are each a channel the model never saw.
 Exercise is not a model input: `T1DMDROID` records it,
 `invariants.md` §3 and §5 fix its unit and its curve, and no model consumes it.
 
