@@ -20,9 +20,9 @@ that between them implement one physiology and one model contract.
 
 Some facts are needed in more than one repository: the five-minute grid, the
 physiologic units, the Kovatchev risk transform, the curve mathematics, the
-forecast layout, and the model contract the app decodes against. Each is written
-down once, here. A project that needs one keeps a stub at the path its readers
-expect, pointing back.
+forecast layout, the model contract the app decodes against, and the shape of the
+cache the model pretrains on. Each is written down once, here. A project that
+needs one keeps a stub at the path its readers expect, pointing back.
 
 Duplicated facts drift. Both copies are correct the day they are written and
 disagree later, silently — the software keeps working and one side is wrong.
@@ -38,6 +38,7 @@ CLAUDE.md          working rules and the suite map
 SPEC/
   invariants.md    the grid, units, risk spaces, curve semantics, forecast layout
   inference.md     the model contract: checkpoint, graph, decode, constants
+  cache.md         the pretraining cache: row geometry, tails, arrays, meta
 scripts/
   check-no-copies.sh   fails when a specification has been copied into a project
 PROJECTS/

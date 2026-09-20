@@ -7,9 +7,10 @@ correct without checking the other.
 Each invariant records which repositories it binds. `../CLAUDE.md` holds the
 active/passive distinction that governs how strongly.
 
-A companion specification applies these definitions to a particular seam and is
+Two companion specifications apply these definitions to a particular seam and are
 equally normative: `inference.md`, the model contract between the trainer and the
-app. Both are single-copy — see `../scripts/check-no-copies.sh`.
+app, and `cache.md`, the pretraining-cache contract between the simulator and the
+trainer. All three are single-copy — see `../scripts/check-no-copies.sh`.
 
 ---
 

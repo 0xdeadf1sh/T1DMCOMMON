@@ -104,11 +104,11 @@ If a value, formula, or contract is defined under `SPEC/`, reference it. Do not
 restate it, re-derive it, or re-hardcode it. If you find an existing duplicate,
 report it rather than adding a third.
 
-**Specifications are single-copy, and that is checked.** `SPEC/invariants.md` and
-`SPEC/inference.md` exist here and nowhere else. A project that needs one keeps a
-**stub** at the path its readers expect, naming this document, pointing at the
-sibling checkout, and carrying only what is local to that project. Never restore a
-copy.
+**Specifications are single-copy, and that is checked.** `SPEC/invariants.md`,
+`SPEC/inference.md` and `SPEC/cache.md` exist here and nowhere else. A project
+that needs one keeps a **stub** at the path its readers expect, naming this
+document, pointing at the sibling checkout, and carrying only what is local to
+that project. Never restore a copy.
 
 ```
 scripts/check-no-copies.sh          # 0 = clean, 1 = a copy exists
@@ -156,6 +156,7 @@ Changing any of these in one repository obliges you to check its counterparts:
 | Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
 | The metric levels, band projection, CG-EGA anchoring | `SPEC/invariants.md` §6.1–6.3 | `T1DMAI` ↔ `T1DMDROID` |
 | The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
+| The pretraining cache: row geometry, tail arms, doses, meta keys | `SPEC/cache.md` | `T1DMSIM` → `T1DMAI` |
 | The conformal band correction — its apply AND its fit | `SPEC/inference.md` §8.4 | `T1DMAI` ↔ `T1DMDROID` |
 
 Anything on that list is a cross-repository change. Read
