@@ -2,12 +2,17 @@
 
 Seed-driven generator of synthetic Type 1 Diabetes glucose traces. Unlike the
 UVA/Padova family it models patient *behaviour* as the primary driver —
-carbohydrate intake, insulin action, insulin sensitivity and exercise are
-generated as factor curves, and blood glucose emerges from their interaction.
-Python. MIT.
+carbohydrate intake, insulin action and insulin sensitivity are generated as
+factor curves, and blood glucose emerges from their interaction. Python. MIT.
 
 Passive tooling. It produces the corpus `T1DMAI` pretrains on, builds the blosc2
 cache, and emits the normalization statistics that pipeline consumes.
+`../SPEC/cache.md` is that cache's contract: row geometry, the four
+counterfactual tails, the arrays and the meta keys.
+
+**Patients never exercise.** The simulator carries no exercise constant, field,
+curve, channel or event. `T1DMDROID` still records exercise; `../SPEC/invariants.md`
+§3 and §5 hold the unit and the curve it builds.
 
 ## Reading the comparison artefacts
 
@@ -41,21 +46,28 @@ glucose and insulin blind to meals, the BG distribution is wide by construction:
 mean about 177 mg/dL, SD about 114, and roughly 3% of CGM time at the 400 ceiling.
 True BG has no floor and can go below zero; only the CGM reading is clipped.
 
-## The carbohydrate log
+## The exported record is the patient's log
 
-On the `old-sim` branch the exported carbohydrate is the patient's log, not what
-they ate. `total_carb` and the `carb_g` / `carb_gi` events carry guessed grams and
-a guessed GI at the true onset step; a meal logs the carb count its bolus is dosed
-from. Blood glucose runs on `total_carb_true`, which the cache does not store.
-Insulin and exercise are exact.
+What leaves the simulator is what the patient believes: `total_carb` and the
+`carb_g` / `carb_gi` events carry guessed grams and a guessed GI at the true onset
+step, and `total_insulin` / `basal_insulin` / `bolus_insulin` and the dose events
+carry the intended dose, before the injection-site factor. A meal logs the carb
+count its bolus is dosed from. Blood glucose runs on the `*_true` keys, which the
+cache does not store. `../SPEC/cache.md` §4 is the rule.
+
+`main` and `old-sim` predate the split and export true series under some of those
+same names — a trap, since nothing about a row's shape says which branch built it.
 
 ## Stale artefacts on disk
 
 `diff/README.md`, `diff/stats.json` and the `uva_padova/` reports predate the
 randomised dosing policy and describe a different simulator. Regenerating them
-needs the three real datasets and simglucose. Until then
-`test_unbiased_build_sits_near_baseline` compares fresh caches against that stale
-baseline and fails.
+needs the three real datasets and simglucose, neither of which is on this machine.
+The comparison mechanism stays and still reads `diff/stats.json`; no test requires
+that baseline to match the population as it is tuned now.
+
+The population is tuned against one real CGM record rather than the public
+cohorts, so a figure quoted from those reports describes neither.
 
 Analysis code deserves the same scrutiny as the thing it analyses: an audit of
 the comparison tooling once fixed fifteen defects in it.
