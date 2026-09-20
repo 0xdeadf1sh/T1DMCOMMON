@@ -47,7 +47,7 @@ scan() {
     --include='*.py' --include='*.kts' --include='*.toml' \
     --exclude-dir=.git --exclude-dir=target --exclude-dir=build \
     --exclude-dir=.gradle --exclude-dir=.kotlin --exclude-dir=node_modules \
-    --exclude-dir=.venv --exclude-dir=__pycache__ --exclude-dir=data \
+    --exclude-dir=.venv --exclude-dir=__pycache__ \
     "${TARGETS[@]}" 2>/dev/null | sort -u | cut -d: -f1 | uniq -c
 }
 
