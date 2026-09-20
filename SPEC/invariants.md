@@ -80,7 +80,7 @@ written back.
 | Basal slot dose | units **delivered in that slot** | Not a rate. Summing slots yields a daily total. |
 | Glycaemic index | 0–100 | A GI, not a 0–1 fraction. |
 | Heart rate | bpm | |
-| Exercise | grams of carbohydrate equivalent | Glucose disposal, expressed as the carbohydrate it offsets. Never a duration, an intensity, or an energy. Positive-valued; the sign lives in the equation that subtracts it. See §5. |
+| Exercise | grams of carbohydrate equivalent | `T1DMDROID` only, and no model input. Glucose disposal, expressed as the carbohydrate it offsets. Never a duration, an intensity, or an energy. Positive-valued; the sign lives in the equation that subtracts it. See §5. |
 | Duration | minutes | Everywhere `duration_min` appears. |
 | Rate constants | per hour | `ka_per_hour`, `ke_per_hour`. |
 | Timestamps | epoch milliseconds, UTC | |
@@ -212,6 +212,8 @@ What the rate *is* differs by channel:
 - **Exercise — glucose disposal rate.** Grams of carbohydrate equivalent removed
   from the blood per bucket: a gamma curve spread across the session and the
   ninety minutes after it. Not the session's duration, intensity, or energy cost.
+  `T1DMDROID` records exercise and builds this curve; `T1DMSIM` generates none and
+  no model consumes one, so this channel binds that repository alone.
 
 A gamma bucket carries the density `t^(k−1)·e^(−t/θ)` averaged over sixteen
 midpoints across its five minutes, from `t = 0`; a Bateman bucket carries
@@ -272,16 +274,12 @@ k         = 3.0
 dur       = duration_min + 90                      # minutes
 ```
 
-`carb_equiv_per_min` is per-patient. `T1DMSIM` uses a population constant of
-`0.5`; `T1DMDROID` takes the patient's own value and defaults to the same `0.5`.
-Magnitude scales with duration alone — every model pretrained on `T1DMSIM` learnt
-it that way, so deriving it from pace, heart rate or energy puts the channel
-off-distribution.
+`carb_equiv_per_min` is per-patient: `T1DMDROID` takes the patient's own value and
+defaults to `0.5`. Magnitude scales with duration alone; pace, heart rate and
+energy never enter it.
 
-The post-exercise insulin-sensitivity boost is a **separate mechanism** and is
-never carried by this curve: `T1DMSIM` raises sensitivity for six hours after the
-session by `0.10 · duration_min / 75`, capped at `0.30`. Folding that tail into
-the exercise channel counts it twice.
+A post-exercise insulin-sensitivity boost is a **separate mechanism** and is never
+carried by this curve, which would count the tail twice.
 
 Basal is auto-extended across the whole context and forecast window rather than
 treated as a discrete event, because background insulin is always present.
