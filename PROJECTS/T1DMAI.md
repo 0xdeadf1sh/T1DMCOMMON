@@ -70,8 +70,8 @@ flag the duplication as drift — it is not.** Model risk space only.
 T1DMAI's own cache builder is gone; it relies on
 `../T1DMSIM/cache_simulator.py` (symlinked as `T1DMSIM/`) to build the blosc2
 cache, which also emits `normalization_stats.json` beside `meta.json`.
-`../SPEC/cache.md` is that cache's contract, and `../SPEC/cache.md` §6 has the
-loader gate on its `meta.json` geometry keys. `data.py` instead holds
+`../SPEC/cache.md` is that cache's contract, and its §6 has the loader gate on
+the `meta.json` geometry keys. `data.py` instead holds
 `ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
 from it — a live deviation, and `docs/` carries `COMPARISON.md` and
 `INFERENCE.md` but no stub naming the cache contract.
