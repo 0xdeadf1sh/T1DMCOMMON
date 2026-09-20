@@ -21,10 +21,15 @@ euglycaemic zero-risk centre sits near 128 mg/dL rather than 112.5.
 **Position comes from RoPE alone.** No additive per-head distance bias and no
 `alibi_slopes` tensor. QK-norm on Q and K stays.
 
-**The model consumes no exercise.** Nothing produces, normalizes, exports, plots
-or scores the channel. `../SPEC/inference.md` §6 holds the input the model does
-take, and what carbohydrate and insulin mean there — the patient's guess and the
-dose they injected, not the physiology.
+**The trainer still consumes exercise, and the specification drops it — a live
+deviation.** `config.py`'s `curves` layout ends in `exercise_equiv`, its `events`
+layout takes `exercise_min` with the rest of `T1DMSIM`'s event channels, and
+`normalization.py` pins the counts at 4 and 10; `train.py`, `metrics/whatif.py`,
+`gui.py` and `tests/test_data.py` all carry the channel. `../SPEC/inference.md`
+§6 fixes the input the model takes — three normalized channels plus the mask bit
+— and what carbohydrate and insulin mean there: curves summing to the patient's
+guess and to the dose they injected, not to the physiology. Taking exercise out
+is a task of its own.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else
