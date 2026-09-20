@@ -91,8 +91,10 @@ channels — `carb_g`, `carb_gi`, `bolus_u`, `bolus_peak_min`, `bolus_dur_h`,
 `basal_u`, `basal_peak_min`, `basal_dur_h`, `exercise_min`, each dose at its
 onset step — read from a cache built with `cache_simulator.py --events`, whose
 `normalization_stats_events.json` is its statistics. `normalization.py` pins the
-normalized counts at 4 and 10, `../SPEC/inference.md` §6 at 3 and 9 — the
-exercise deviation above. A checkpoint is stamped
+normalized counts at 4 and 10; `../SPEC/inference.md` §6 fixes `curves` at three
+channels plus the mask bit, and `events` follows `T1DMSIM`'s `EVENT_CHANNELS`,
+which still carries `exercise_min`, so both counts fall by one with the deviation
+above. A checkpoint is stamped
 `input_layout` and is one or the other. An `events` checkpoint does not export:
 the descriptor and the on-device feature builder are `curves` only.
 
