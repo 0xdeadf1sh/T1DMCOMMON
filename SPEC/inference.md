@@ -149,9 +149,9 @@ globals from the checkpoint and instantiate.
 | `N_HEADS` | attention heads | `n_heads` | `D_MODEL / HEAD_DIM` |
 | `HEAD_DIM` | `= D_MODEL // N_HEADS` | derive | `blocks.0.attn.q_norm.weight` length |
 | `FFN_DIM` | SwiGLU inner width | `ffn_dim` | `blocks.0.ffn.w1.weight` rows |
-| `PATCH_SIZE` | steps per patch = 6 | `patch_size` | `patch_embed.weight` cols `/ 5` |
-| `N_INPUT_FEATURES` | 5 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
-| `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 30 | derive | `patch_embed.weight` cols |
+| `PATCH_SIZE` | steps per patch = 6 | `patch_size` | `patch_embed.weight` cols `/ 4` |
+| `N_INPUT_FEATURES` | 4 (fixed) | — | `PATCH_DIM / PATCH_SIZE` |
+| `PATCH_DIM` | `PATCH_SIZE·N_INPUT_FEATURES` = 24 | derive | `patch_embed.weight` cols |
 | `PREDICTION_PATCHES` | horizon patches | `prediction_patches` | — |
 | `MIN/MAX_CONTEXT_PATCHES` | 168 / 336 | `min/max_context_patches` | — |
 | `MAX_MASKED_PATCHES` (M) | head slots the caller fills | `max_masked_patches` | — (sizes no weight) |
@@ -361,25 +361,28 @@ the wrong range it cannot fire at all.
 
 ## 6. Normalization (raw ↔ z-score)
 
-Four normalized channels, fixed order — the index **is** the model input-feature
+Three normalized channels, fixed order — the index **is** the model input-feature
 index:
 
 ```
-CHANNEL_NAMES = ['bg_absolute', 'carb_intake', 'insulin_combined', 'exercise_equiv']
-                #  feat 0        feat 1         feat 2              feat 3
+CHANNEL_NAMES = ['bg_absolute', 'carb_intake', 'insulin_combined']
+                #  feat 0        feat 1         feat 2
 ```
 
 Membership sets: `RISK_SPACE_CHANNELS = {'bg_absolute'}`,
-`SPARSE_LOG1P_CHANNELS = {'carb_intake', 'insulin_combined', 'exercise_equiv'}`.
+`SPARSE_LOG1P_CHANNELS = {'carb_intake', 'insulin_combined'}`.
 
-Input feat 4 (`bg_masked`, §7.3) is a bit, not a signal: no entry here, no
+Input feat 3 (`bg_masked`, §7.3) is a bit, not a signal: no entry here, no
 statistics, no encoding.
 
 **Units.** BG in mg/dL; carb in **grams per 5-min step**; insulin in **units per
-5-min step**, with basal and bolus already **summed** into the single channel;
-exercise as a **carbohydrate-equivalent glucose disposal in grams per 5-min step**
-— the trained scale, never rescaled to an intensity. One timestep = 5 min; one
-patch = 6 steps = 30 min.
+5-min step**, with basal and bolus already **summed** into the single channel. One
+timestep = 5 min; one patch = 6 steps = 30 min.
+
+Carbohydrate and insulin are the **patient's own record** — guessed grams, and the
+dose the patient injected — never the physiology the simulator ran on
+(`cache.md` §4). Exercise is not a model input: `T1DMDROID` records it,
+`invariants.md` §3 and §5 fix its unit and its curve, and no model consumes it.
 
 **normalize (raw → z):**
 
@@ -404,12 +407,11 @@ carb/ins   :  x = max( expm1( z·(std_c + 1e-8) + mean_c ), 0 )
 ```json
 { "bg_absolute":      {"mean": <risk-space>,  "std": <risk-space>},
   "carb_intake":      {"mean": <log1p-space>, "std": <log1p-space>},
-  "insulin_combined": {"mean": <log1p-space>, "std": <log1p-space>},
-  "exercise_equiv":   {"mean": <log1p-space>, "std": <log1p-space>} }
+  "insulin_combined": {"mean": <log1p-space>, "std": <log1p-space>} }
 ```
 
-The BG mean/std live in **risk space** (fit on `f(bg)`); the other three in log1p
-space. All four keys are required, each with `std > 0`. Prefer the checkpoint's
+The BG mean/std live in **risk space** (fit on `f(bg)`); the other two in log1p
+space. All three keys are required, each with `std > 0`. Prefer the checkpoint's
 embedded stats — they are exactly what the model was trained with.
 
 ---
@@ -417,18 +419,18 @@ embedded stats — they are exactly what the model was trained with.
 ## 7. Input construction (the frozen index map)
 
 Per timestep the features are
-`[bg_absolute, carbs, insulin, exercise, bg_masked]` (`N_INPUT_FEATURES = 5`):
-feats 0–3 are §6's normalized channels in that order, feat 4 the per-patch mask
+`[bg_absolute, carbs, insulin, bg_masked]` (`N_INPUT_FEATURES = 4`):
+feats 0–2 are §6's normalized channels in that order, feat 3 the per-patch mask
 bit (§7.3). The output-channel → input-feature map is
-`CHANNEL_TO_FEAT = {0: 1, 1: 2, 2: 3}` (carb-channel 0 → feat 1, insulin-channel 1
-→ feat 2, exercise-channel 2 → feat 3). BG (feat 0) is never overrideable.
+`CHANNEL_TO_FEAT = {0: 1, 1: 2}` (carb-channel 0 → feat 1, insulin-channel 1 →
+feat 2). BG (feat 0) is never overrideable.
 
 **Patch flatten order is step-major:** `(PATCH_SIZE, N_INPUT_FEATURES) →
 PATCH_DIM` via a C-contiguous reshape:
 
 ```
-flat_index = t · N_INPUT_FEATURES + feat        # t in [0, 6), feat in [0, 5)
-PATCH_DIM  = PATCH_SIZE · N_INPUT_FEATURES = 6 · 5 = 30
+flat_index = t · N_INPUT_FEATURES + feat        # t in [0, 6), feat in [0, 4)
+PATCH_DIM  = PATCH_SIZE · N_INPUT_FEATURES = 6 · 4 = 24
 ```
 
 ### 7.1 Input filtering is the consumer's choice
@@ -436,8 +438,8 @@ PATCH_DIM  = PATCH_SIZE · N_INPUT_FEATURES = 6 · 5 = 30
 The reference pipeline applies **no smoother**. Inputs, forecast target, loss and
 metrics all live in one raw post-noise space: the same raw BG is the model input,
 the forecast target and the anchor. BG is clamped to the descriptor's
-`[BG_CLAMP_MIN, BG_CLAMP_MAX]`; carb, insulin and exercise are floored at `0` (the
-`log1p` transform does this in `normalize`).
+`[BG_CLAMP_MIN, BG_CLAMP_MAX]`; carb and insulin are floored at `0` (the `log1p`
+transform does this in `normalize`).
 
 A consumer may denoise its own BG channel before normalization — a live CGM feed
 is noisier than the simulator's — but that is an application decision outside this
@@ -451,13 +453,13 @@ its own window and taps, in its own repository.
 `context` has shape `(n_ctx, PATCH_SIZE, N_INPUT_FEATURES)`, already normalized.
 From a raw history:
 
-1. Take the trailing raw per-step series for BG (mg/dL), carb (g/step), insulin
-   (U/step, basal + bolus summed) and exercise (carb-equivalent g/step), length
-   `n_ctx · PATCH_SIZE`, with `n_ctx ∈ [168, 336]`.
-2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
-   0. Optionally pre-filter BG (§7.1); the reference applies no filter.
-3. `normalize` each channel (BG via risk-z, the other three via log1p-z).
-4. Reshape to `(n_ctx, 6, 5)`: the four normalized channels in feats 0–3, feat 4
+1. Take the trailing raw per-step series for BG (mg/dL), carb (g/step) and insulin
+   (U/step, basal + bolus summed), length `n_ctx · PATCH_SIZE`, with
+   `n_ctx ∈ [168, 336]`.
+2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb and insulin at 0.
+   Optionally pre-filter BG (§7.1); the reference applies no filter.
+3. `normalize` each channel (BG via risk-z, the other two via log1p-z).
+4. Reshape to `(n_ctx, 6, 4)`: the three normalized channels in feats 0–2, feat 3
    written by §7.3.
 
 ### 7.3 Masked patches
@@ -465,18 +467,17 @@ From a raw history:
 A masked patch withholds its BG and announces that it did:
 
 - **feat 0 (BG): 0** — it is what the model predicts.
-- **feat 4 (`bg_masked`): 1** in all `PATCH_SIZE` step-major columns of that
+- **feat 3 (`bg_masked`): 1** in all `PATCH_SIZE` step-major columns of that
   patch, `0` on every visible patch. The bit is per patch, and `z = 0` in a masked
-  BG slot is an ordinary reading (≈142 mg/dL on the simulator pool), not a
-  sentinel — the masked set is announced, never inferred.
-- **feats 1–3 (carb / insulin / exercise): the announced plan.** A masked context
-  patch keeps its observed values. A future patch takes the no-event baseline
-  `normalize(0)` per channel. A literal `z = 0` routes through the sparse `log1p`
-  inverse and announces a phantom ≈0.47 g of carbohydrate, ≈0.15 U of insulin and
-  ≈0.025 g of exercise equivalent per step — `expm1` of each channel's fitted
-  mean, not the mean itself. Overwrite these slots with **announced** future doses
-  or sessions (normalized) to condition the forecast; never write into them
-  anything the patient did not announce.
+  BG slot is an ordinary reading, not a sentinel — the masked set is announced,
+  never inferred.
+- **feats 1–2 (carb / insulin): the announced plan.** A masked context patch keeps
+  its observed values. A future patch takes the no-event baseline `normalize(0)`
+  per channel. A literal `z = 0` routes through the sparse `log1p` inverse and
+  announces a phantom dose — `expm1` of the channel's fitted mean, not the mean
+  itself. Overwrite these slots with **announced** future doses (normalized) to
+  condition the forecast; never write into them anything the patient did not
+  announce.
 
 The `P = PREDICTION_PATCHES` future patches carry no observed BG at all, so all of
 them are masked. A masked set totals at most `MAX_MASKED_PATCHES` patches, and at
@@ -716,15 +717,14 @@ move a median.
 **Single window** (≤ `PREDICTION_HORIZON_HOURS`, default 2 h):
 
 1. Gather the trailing raw history: BG (mg/dL), carb (g/step), insulin (U/step,
-   basal + bolus summed), exercise (carb-equivalent g/step), length `n_ctx · 6`,
-   `n_ctx ∈ [168, 336]`.
-2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb, insulin and exercise at
-   0 (no filtering — `normalize` floors the sparse channels through `log1p`).
-3. `normalize` each channel → `context (n_ctx, 6, 5)`, feat 4 written in step 4.
+   basal + bolus summed), length `n_ctx · 6`, `n_ctx ∈ [168, 336]`.
+2. Clamp BG to `[BG_CLAMP_MIN, BG_CLAMP_MAX]`; floor carb and insulin at 0 (no
+   filtering — `normalize` floors the sparse channels through `log1p`).
+3. `normalize` each channel → `context (n_ctx, 6, 4)`, feat 3 written in step 4.
 4. Choose the masked set — the default is the trailing `P` patches, a forecast.
-   Build `patches (T, 30)`: context reshaped step-major, then `P` future patches
-   with BG = 0 and carb/insulin/exercise at `normalize(0)` **or** announced. On
-   every masked patch zero feat 0 and set feat 4 (§7.3).
+   Build `patches (T, 24)`: context reshaped step-major, then `P` future patches
+   with BG = 0 and carb/insulin at `normalize(0)` **or** announced. On every
+   masked patch zero feat 0 and set feat 3 (§7.3).
 5. Build `attn_mask` from the visible/masked labelling (§4).
 6. `anchor_bg`: one mg/dL anchor per masked patch (§7.4); `mask_idx`: their patch
    indices; pad both to `M` slots.
@@ -738,8 +738,8 @@ roll —
 
 1. Run steps 4–8 → a risk-space `median`.
 2. Re-feed: `median → f_inv → mg/dL → normalize → BG feat-0 slot` of the new
-   context patches, clearing feat 4 — those patches are visible now. Carb, insulin
-   and exercise come from the caller's announced schedule for that roll, else the
+   context patches, clearing feat 3 — those patches are visible now. Carb and
+   insulin come from the caller's announced schedule for that roll, else the
    `normalize(0)` no-event baseline.
 3. Slide the context forward, dropping the oldest patches once it exceeds
    `MAX_CONTEXT_PATCHES`. BG anchors at the last forecast BG carried across rolls.
@@ -781,16 +781,15 @@ model.eval()
 
 # 2. Build a normalized context from a raw history.
 n_ctx = MIN_CONTEXT_PATCHES
-n_ch  = len(CHANNEL_NAMES)                          # 4 normalized channels
+n_ch  = len(CHANNEL_NAMES)                          # 3 normalized channels
 raw   = np.zeros((n_ctx * PATCH_SIZE, n_ch), dtype=np.float32)
 raw[:, 0] = 120.0        # BG mg/dL   (raw; clamp a real stream to the physical range)
 raw[:, 1] = 0.0          # carb g/step
 raw[:, 2] = 0.02         # insulin U/step (basal)
-raw[:, 3] = 0.0          # exercise carb-equivalent g/step
-ctx_norm = normalize(raw, stats)                    # (n_ctx*6, 4) normalized
+ctx_norm = normalize(raw, stats)                    # (n_ctx*6, 3) normalized
 context  = torch.zeros(n_ctx, PATCH_SIZE, N_INPUT_FEATURES)
 context[..., :n_ch] = torch.from_numpy(
-    ctx_norm.reshape(n_ctx, PATCH_SIZE, n_ch))      # feat 4 stays 0: predict() writes it
+    ctx_norm.reshape(n_ctx, PATCH_SIZE, n_ch))      # feat 3 stays 0: predict() writes it
 
 # 3. Forecast. predict() handles the mask, the per-slot anchors, and f_inv.
 with torch.no_grad():
@@ -800,8 +799,8 @@ median_bg = out["median_bg"]    # (P*PATCH_SIZE,) mg/dL headline, P masked patch
 bands     = out["bands"]        # (P, PATCH_SIZE, 7) mg/dL fan
 ```
 
-To announce future doses and sessions, pass
-`overrides={0: carb_norm, 1: insulin_norm, 2: exercise_norm}` (each
+To announce future doses, pass
+`overrides={0: carb_norm, 1: insulin_norm}` (each
 `(PREDICTION_PATCHES, PATCH_SIZE)` **normalized**) to `predict`. For a backcast or
 an infill pass `mask_spans=[(start_patch, length), ...]`. For horizons past 2 h use
 `inference.predict_rolling(...)`.
@@ -819,10 +818,10 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
-| `N_INPUT_FEATURES` / `PATCH_DIM` | `5` / `30` |
-| feature order | `[bg_absolute, carb, insulin, exercise, bg_masked]` |
-| `CHANNEL_TO_FEAT` | `{0: 1, 1: 2, 2: 3}` |
-| patch flatten | step-major: `flat = t·5 + feat` |
+| `N_INPUT_FEATURES` / `PATCH_DIM` | `4` / `24` |
+| feature order | `[bg_absolute, carb, insulin, bg_masked]` |
+| `CHANNEL_TO_FEAT` | `{0: 1, 1: 2}` |
+| patch flatten | step-major: `flat = t·4 + feat` |
 | `PREDICTION_PATCHES` / output steps | `4` / `24` (2 h) at the default horizon |
 | `MIN / MAX_CONTEXT_PATCHES` | `168 / 336` (84–168 h) |
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
@@ -832,12 +831,12 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | `ROPE_BASE` | `1000` |
 | RMSNorm `eps` | `1e-6` |
 | normalize `std` floor | `1e-8` |
-| input filter | none in the reference (raw signal; BG clamped to the descriptor's physical range, carb/insulin/exercise floored at 0); a consumer's own filter must be strictly causal (§7.1) |
+| input filter | none in the reference (raw signal; BG clamped to the descriptor's physical range, carb/insulin floored at 0); a consumer's own filter must be strictly causal (§7.1) |
 | position encoding | RoPE only; no additive distance bias |
 | SDPA scaling | `1/sqrt(HEAD_DIM)` |
 
 The per-channel `mean` / `std` come from `ckpt['normalization_stats']` (BG in risk
-space, carb/insulin/exercise in log1p space).
+space, carb/insulin in log1p space).
 
 ---
 
@@ -853,11 +852,11 @@ space, carb/insulin/exercise in log1p space).
 - **What a non-PyTorch runtime reimplements outside the exported graph** (all pure
   numeric): per-channel `normalize` / `denormalize`; `kovatchev_f` /
   `kovatchev_f_inv` with their clamp guards; the per-slot anchor; the step-major
-  patch flatten; the masked-patch fill (feat 0 zeroed, feat 4 set, the maskable
+  patch flatten; the masked-patch fill (feat 0 zeroed, feat 3 set, the maskable
   feats at `normalize(0)` or the announced plan); the bool attention mask; the
   step-state spline (§8.2) and the head MLP over its output;
   `assemble_quantiles` (softplus, cumsum); and the optional conformal apply.
-- **Watch the `bg_masked` bit.** Nothing else writes feat 4, so a builder that
+- **Watch the `bg_masked` bit.** Nothing else writes feat 3, so a builder that
   forgets it announces every masked patch as an observation, with every shape still
   matching and every fan still monotone.
 - **Keep the decode constants exact.** `ROPE_BASE`, the B-spline weights and the
