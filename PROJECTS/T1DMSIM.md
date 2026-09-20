@@ -20,8 +20,8 @@ writes `cache_format` `blosc2-ndarray-v1` over 2394-step rows from
 2016-step context, and carries no boundary deep copy, no arm, no tail array and
 no `skills.npy`.
 
-**The simulator still exercises its patients, and the specification has no such
-channel — a live deviation.** `simulator.py` carries
+**The simulator still exercises its patients, and the specification binds that
+channel to `T1DMDROID` alone — a live deviation.** `simulator.py` carries
 `EXERCISE_DURATION_MEAN_MIN`, `EXERCISE_CARB_EQUIV_PER_MIN`, the
 `exercise_duration_mean_min` patient field, the `exercise_min` event channel, the
 `total_exercise` step key and the post-exercise sensitivity reduction;

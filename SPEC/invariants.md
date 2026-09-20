@@ -515,7 +515,8 @@ repository. An entry is **deleted** once the implementation agrees.
    `curves` layout in `exercise_equiv` and `normalization.py` pins that count at
    4. The two move together or no model loads.
 
-3. **`T1DMSIM` exercises its patients.** `simulator.py` carries the
+3. **`T1DMSIM` exercises its patients.** §3 and §5 bind the channel to
+   `T1DMDROID` alone. `simulator.py` carries the
    `exercise_duration_mean_min` patient field, the `exercise_min` event channel,
    the `total_exercise` step key and the post-session sensitivity reduction, and
    `cache_simulator.py` normalizes `total_exercise` as `exercise_equiv`.
