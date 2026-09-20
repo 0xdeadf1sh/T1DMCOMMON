@@ -75,7 +75,8 @@ in the shape the exporter writes rather than projecting it onto a second schema.
 live deviation.** `crates/t1dm-core/src/preproc.rs` pins the feature count at 5
 and requires an `exercise_equiv` entry in the descriptor's `normalization_stats`,
 while `../SPEC/inference.md` §6–7 fixes the input at three channels and four
-features. A descriptor from the current trainer is refused at load. Two comments
+features. The current trainer emits exactly those five, so its descriptor loads
+and one built to the specification is refused. Two comments
 sit on the same seam: `ExerciseDisposal.kt` calls its default rate `T1DMSIM`'s
 population constant, and `ExerciseDisposalTest.kt` calls an intensity-scaled
 magnitude off-distribution for models pretrained on `T1DMSIM` — neither holds
