@@ -94,6 +94,10 @@ What the model sees is the patient's record, not the physiology:
   drawn once per row and shared by arms 1 and 3, and the logged curve and the
   event both carry the **intended** dose.
 
+Both draws land on a throwaway deep copy of the boundary simulator. `_site_quality`
+and `_logged_carb` spend the simulator's own `rng` and `_log_rng`, and spending them
+on the boundary simulator itself would move arm 0 off the continuation §2 pins.
+
 `total_carb`, `total_insulin`, `basal_insulin`, `bolus_insulin` and every event
 channel are logged values. The `*_true` keys are what drives blood glucose, and
 the cache does not store them; anything measured against physiology reads those.
@@ -127,7 +131,7 @@ apart on disk, and a name is never shared between the two ranks.
 
 | key | value |
 | --- | --- |
-| `cache_format` | `blosc2-ndarray-v2` |
+| `cache_format` | `blosc2-ndarray-v3` |
 | `n_timesteps` | `2016`, the context alone |
 | `context_steps` | `2016` |
 | `tail_steps` | `24` |

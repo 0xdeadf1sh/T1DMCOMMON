@@ -66,7 +66,9 @@ cache, which also emits `normalization_stats.json` beside `meta.json`.
 
 **Nothing here reads that contract — a live deviation.** `data.py` holds
 `ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
-from it, where §6 gates on the `meta.json` geometry keys; it samples a window
+from it, where §6 gates on the `meta.json` geometry keys; its
+`SUPPORTED_CACHE_FORMATS` is `('blosc2-ndarray-v1', 'npy-memmap-v1')`, so it
+refuses the `blosc2-ndarray-v3` every current build writes; it samples a window
 anywhere in a whole trajectory, with no arm, no tail and no reader of
 `skills.npy`, where §1 and §6 make a sample one arm of one row — a right-end
 context crop, the arm drawn uniformly, that arm's tail doses the horizon input

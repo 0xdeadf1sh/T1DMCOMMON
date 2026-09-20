@@ -8,17 +8,12 @@ factor curves, and blood glucose emerges from their interaction. Python. MIT.
 Passive tooling. It produces the corpus `T1DMAI` pretrains on, builds the blosc2
 cache, and emits the normalization statistics that pipeline consumes.
 `../SPEC/cache.md` is that cache's contract: row geometry, the four
-counterfactual tails, the arrays and the meta keys. `simulator.py`,
-`cache_simulator.py`, `tests/test_curves.py` and `docs/math.md` cite
-`../SPEC/invariants.md` §5 by path; nothing inside `T1DMSIM` names `cache.md`,
-so an agent entering by that repository's own files never learns that contract
-exists. A `docs/` stub naming it is the fix, and it belongs to `T1DMSIM`.
-
-**`cache_simulator.py` builds none of that contract — a live deviation.** It
-writes `cache_format` `blosc2-ndarray-v1` over 2394-step rows from
-`DEFAULT_SIM_HOURS = 199.5`, against the contract's `blosc2-ndarray-v2` and its
-2016-step context, and carries no boundary deep copy, no arm, no tail array and
-no `skills.npy`.
+counterfactual tails, the arrays and the meta keys. `cache_simulator.py` builds
+it — the 2016-step context, the four behaviour-off tails, the `tail_` and
+`tail_dose_` arrays, `skills.npy`, the geometry meta keys and `cache_format`
+`blosc2-ndarray-v3`. `cache_simulator.py`, `CLAUDE.md`, `README.md`,
+`docs/math.md` and both cache tests name `cache.md` by path, so an agent entering
+by the repository's own files reaches the contract.
 
 **The simulator still exercises its patients, and the specification binds that
 channel to `T1DMDROID` alone — a live deviation.** `simulator.py` carries
