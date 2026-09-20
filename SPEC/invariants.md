@@ -213,8 +213,8 @@ What the rate *is* differs by channel:
 - **Exercise — glucose disposal rate.** Grams of carbohydrate equivalent removed
   from the blood per bucket: a gamma curve spread across the session and the
   ninety minutes after it. Not the session's duration, intensity, or energy cost.
-  `T1DMDROID` records exercise and builds this curve; `T1DMSIM` generates none and
-  no model consumes one, so this channel binds that repository alone.
+  This channel binds `T1DMDROID` alone: it records exercise and builds this
+  curve, and no model input carries one (`inference.md` §6).
 
 A gamma bucket carries the density `t^(k−1)·e^(−t/θ)` averaged over sixteen
 midpoints across its five minutes, from `t = 0`; a Bateman bucket carries

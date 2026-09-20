@@ -38,7 +38,7 @@ If `SPEC/` states the rule, amend it there before touching any implementation.
 If `SPEC/` does not state it yet, add it. An implementation change that leaves
 the spec stale has moved the drift rather than fixed it.
 
-`invariants.md` and `inference.md` are **single-copy**. Amend the original; never bring a copy back into a project, and never paste a changed
+`invariants.md`, `inference.md` and `cache.md` are **single-copy**. Amend the original; never bring a copy back into a project, and never paste a changed
 section into a consumer's documentation. A project's `docs/` entry is a stub
 naming the specification and carrying only what is local to that project.
 `scripts/check-no-copies.sh` enforces this.
