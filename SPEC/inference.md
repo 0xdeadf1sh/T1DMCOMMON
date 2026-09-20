@@ -821,8 +821,8 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | constant | value |
 |---|---|
 | Kovatchev `SCALE / POWER / OFFSET` | **descriptor-carried** (§5.1); `risk-v5` specifies `2.2211457449985317 / 1.084 / 5.540076976170212` |
-| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `10.0 / 400.0` under `risk-v5` |
-| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−6.8198, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
+| `BG_CLAMP_MIN / MAX` | **descriptor-carried**; `1.0 / 400.0` under `risk-v5` |
+| risk clamp `[f(min), f(max)]` | derived from the two bounds; `[−12.3053, +3.1623]` under `risk-v5` — asymmetric, since the transform's anchors (`f(40) = −√10`, `f(400) = +√10`) are not the clamp |
 | the clinical scale | **not here** — `invariants.md` §4. It never decodes a forecast. |
 | `PATCH_SIZE` | `6` (5-min steps; one patch = 30 min) |
 | `N_INPUT_FEATURES` / `PATCH_DIM` | `4` / `24` |
