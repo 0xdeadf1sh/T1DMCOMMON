@@ -8,7 +8,11 @@ factor curves, and blood glucose emerges from their interaction. Python. MIT.
 Passive tooling. It produces the corpus `T1DMAI` pretrains on, builds the blosc2
 cache, and emits the normalization statistics that pipeline consumes.
 `../SPEC/cache.md` is that cache's contract: row geometry, the four
-counterfactual tails, the arrays and the meta keys.
+counterfactual tails, the arrays and the meta keys. Nothing inside `T1DMSIM`
+points here — `docs/` holds `math.md` alone and its `CLAUDE.md` cites section
+numbers without a path — so an agent entering by that repository's own files
+never learns the contract exists. A `docs/` stub naming `cache.md` is the fix,
+and it belongs to `T1DMSIM`.
 
 **The simulator still exercises its patients, and the specification has no such
 channel — a live deviation.** `simulator.py` carries
