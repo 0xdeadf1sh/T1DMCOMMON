@@ -2,9 +2,11 @@
 
 *Binds: `T1DMSIM` → `T1DMAI`.*
 
-`T1DMSIM/cache_simulator.py` writes the pool `T1DMAI` pretrains on; the trainer
-memory-maps it and never runs the simulator. This document fixes the row
-geometry, the counterfactual tails, and what the arrays on disk mean.
+`T1DMSIM/cache_simulator.py` writes the pool `T1DMAI` pretrains on, and the
+trainer memory-maps it. A training run that simulates instead of reading the pool
+builds its rows through `T1DMSIM`'s own row builder: one implementation, never a
+second copy in the trainer. This document fixes the row geometry, the
+counterfactual tails, and what the arrays on disk mean.
 
 **This is the only copy.** Changing anything below is a shared-contract change —
 read `../skills/shared-contract-change` first. `invariants.md` defines the grid,
@@ -22,11 +24,17 @@ One row is one patient on the five-minute grid:
 4 paired tails of 24 steps              # 2 h per arm, behaviour OFF
 ```
 
+Those three numbers are not free. The context is `MAX_CONTEXT_PATCHES ×
+PATCH_SIZE` and a tail is `PREDICTION_PATCHES × PATCH_SIZE`, both from
+`inference.md` §11, and the offset spans one day on the grid — `288` steps. A
+cache built to any other arithmetic trains a model that cannot consume it, so the
+two documents move together.
+
 The extra warm-up offset lands the boundary on a uniform hour of day.
 It moves the warm-up, never the simulator clock.
 
-The context ends **at the boundary**, so a consumer taking fewer than 336 patches
-crops from the right end of the row.
+The context ends **at the boundary**, so a consumer taking fewer than
+`MAX_CONTEXT_PATCHES` crops from the right end of the row.
 
 At the boundary the simulator is deep-copied once per arm, behaviour is switched
 off in the copy, the arm's dose is injected at tail step 0 — the first step after
@@ -103,12 +111,14 @@ them:
 | path | shape | contents |
 | --- | --- | --- |
 | `tail_<channel>.b2nd` | `(pool_size, 4, 24)` | a per-step channel over the four arms |
-| `tail_<event_channel>.b2nd` | `(pool_size, 4)` | the boundary point dose, under `--events`; `0` where the arm has no such dose |
+| `tail_dose_<event_channel>.b2nd` | `(pool_size, 4)` | the boundary point dose, under `--events`; `0` where the arm has no such dose |
 | `skills.npy` | `(pool_size, 4)` float32 | the patient skills, written like `icr.npy` |
 
 The per-step tails cover every exported channel the model or a diagnostic reads —
 at least `bg_observed`, `bg`, `total_carb`, `total_insulin`, `basal_insulin`,
-`bolus_insulin`.
+`bolus_insulin`. Under `--events` the event channels are exported per-step too,
+so each of them has both arrays; the `tail_dose_` prefix is what keeps the two
+apart on disk, and a name is never shared between the two ranks.
 
 `skills.npy` columns are frozen in this order: `dietary_discipline`,
 `attentiveness`, `dosing_competence`, `lifestyle_consistency`.
