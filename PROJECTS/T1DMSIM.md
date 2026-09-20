@@ -8,11 +8,17 @@ factor curves, and blood glucose emerges from their interaction. Python. MIT.
 Passive tooling. It produces the corpus `T1DMAI` pretrains on, builds the blosc2
 cache, and emits the normalization statistics that pipeline consumes.
 `../SPEC/cache.md` is that cache's contract: row geometry, the four
-counterfactual tails, the arrays and the meta keys. Nothing inside `T1DMSIM`
-points here — `docs/` holds `math.md` alone and its `CLAUDE.md` cites section
-numbers without a path — so an agent entering by that repository's own files
-never learns the contract exists. A `docs/` stub naming `cache.md` is the fix,
-and it belongs to `T1DMSIM`.
+counterfactual tails, the arrays and the meta keys. `simulator.py`,
+`cache_simulator.py`, `tests/test_curves.py` and `docs/math.md` cite
+`../SPEC/invariants.md` §5 by path; nothing inside `T1DMSIM` names `cache.md`,
+so an agent entering by that repository's own files never learns that contract
+exists. A `docs/` stub naming it is the fix, and it belongs to `T1DMSIM`.
+
+**`cache_simulator.py` builds none of that contract — a live deviation.** It
+writes `cache_format` `blosc2-ndarray-v1` over 2394-step rows from
+`DEFAULT_SIM_HOURS = 199.5`, against the contract's `blosc2-ndarray-v2` and its
+2016-step context, and carries no boundary deep copy, no arm, no tail array and
+no `skills.npy`.
 
 **The simulator still exercises its patients, and the specification has no such
 channel — a live deviation.** `simulator.py` carries
@@ -50,9 +56,12 @@ BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold and 
 correction bolus, taken with probability `HYPER_CORRECTION_PROBABILITY` on an
 awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
 
-Below `RENAL_THRESHOLD` only insulin brings BG down; above it `RENAL_CLEARANCE_RATE`
-excretes glucose, at a damping tune carrying a `[DAMP]` tag, not the UVA/Padova
-value. An unbolused meal stays high for hours. The population is tuned
+Insulin is not the only thing that brings BG down: the insulin-independent
+glucose-effectiveness pull toward the equilibrium runs at every step and
+dominates below `RENAL_THRESHOLD`, and exercise subtracts its disposal. Above
+that threshold `RENAL_CLEARANCE_RATE` excretes glucose on top, at a damping tune
+carrying a `[DAMP]` tag, not the UVA/Padova value. An unbolused meal stays high
+for hours. The population is tuned
 tight all the same: seeds 1000–1011 over 168 h each, after a 48 h warm-up, put
 `bg_observed` near a 125 mg/dL mean with an SD near 40, about 5% below 70 mg/dL,
 about 86% in 70–180, and no time at the 400 ceiling.
