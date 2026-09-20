@@ -71,6 +71,14 @@ constants — the app never parses a checkpoint pickle, and parses the descripto
 in the shape the exporter writes rather than projecting it onto a second schema.
 `../SPEC/invariants.md` §4 says why those constants come from the descriptor.
 
+**The model input still carries exercise, and the specification no longer does —
+a live deviation.** `crates/t1dm-core/src/preproc.rs` pins the feature count at 5
+and requires an `exercise_equiv` entry in the descriptor's `normalization_stats`,
+while `../SPEC/inference.md` §6–7 fixes the input at three channels and four
+features. A descriptor from the current trainer is refused at load. The app keeps
+its exercise record and its panels; only the model input moves, in a task of its
+own.
+
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
 selection matrix naming the patch each head slot reads, so forecast, backcast and
 infill are one artifact under different inputs. Nothing in the app holds a
