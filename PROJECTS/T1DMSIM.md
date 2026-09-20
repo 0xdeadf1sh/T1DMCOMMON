@@ -51,8 +51,8 @@ correction bolus, taken with probability `HYPER_CORRECTION_PROBABILITY` on an
 awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
 
 Below `RENAL_THRESHOLD` only insulin brings BG down; above it `RENAL_CLEARANCE_RATE`
-excretes glucose, at a damping tune rather than the UVA/Padova value the rate
-started from. An unbolused meal stays high for hours. The population is tuned
+excretes glucose, at a damping tune carrying a `[DAMP]` tag, not the UVA/Padova
+value. An unbolused meal stays high for hours. The population is tuned
 tight all the same: seeds 1000–1011 over 168 h each, after a 48 h warm-up, put
 `bg_observed` near a 125 mg/dL mean with an SD near 40, about 5% below 70 mg/dL,
 about 86% in 70–180, and no time at the 400 ceiling.
