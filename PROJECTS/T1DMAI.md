@@ -21,15 +21,14 @@ euglycaemic zero-risk centre sits near 128 mg/dL rather than 112.5.
 **Position comes from RoPE alone.** No additive per-head distance bias and no
 `alibi_slopes` tensor. QK-norm on Q and K stays.
 
-**The trainer still consumes exercise, and the specification drops it — a live
-deviation.** `config.py`'s `curves` layout ends in `exercise_equiv`, its `events`
-layout takes `exercise_min` with the rest of `T1DMSIM`'s event channels, and
-`normalization.py` pins the counts at 4 and 10; `train.py`, `metrics/whatif.py`,
-`gui.py` and `tests/test_data.py` all carry the channel. `../SPEC/inference.md`
-§6 fixes the input the model takes — three normalized channels plus the mask bit
-— and what carbohydrate and insulin mean there: curves summing to the patient's
-guess and to the dose they injected, not to the physiology. Taking exercise out
-is a task of its own.
+**No model input carries exercise.** Neither layout has the channel, no
+production, normalisation, export, GUI or metric path reads it, and the exported
+descriptor declares four features with three statistics keys.
+`../SPEC/inference.md` §6 fixes that input and what carbohydrate and insulin
+mean in it; `../SPEC/invariants.md` §3 and §5 keep the unit and the disposal
+curve for `T1DMDROID`'s record alone. That repository still pins five features,
+so no descriptor exported here loads on the phone — `../SPEC/invariants.md`
+known deviation 2.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else
@@ -64,17 +63,15 @@ T1DMAI's own cache builder is gone; it relies on
 cache, which also emits `normalization_stats.json` beside `meta.json`.
 `../SPEC/cache.md` is that cache's contract.
 
-**Nothing here reads that contract — a live deviation.** `data.py` holds
-`ON_THE_FLY_SIM_HOURS = 199.5` and rejects any cache whose `sim_hours` differs
-from it, where §6 gates on the `meta.json` geometry keys; its
-`SUPPORTED_CACHE_FORMATS` is `('blosc2-ndarray-v1', 'npy-memmap-v1')`, so it
-refuses the `blosc2-ndarray-v3` every current build writes; it samples a window
-anywhere in a whole trajectory, with no arm, no tail and no reader of
-`skills.npy`, where §1 and §6 make a sample one arm of one row — a right-end
-context crop, the arm drawn uniformly, that arm's tail doses the horizon input
-and its tail BG the target; and its simulating path runs a local
-`simulate_discard_warmup` rather than `T1DMSIM`'s row builder. `docs/` carries
-`COMPARISON.md` and `INFERENCE.md` but no stub naming the cache contract.
+`data.py` reads that contract. `SUPPORTED_CACHE_FORMATS` is
+`('blosc2-ndarray-v3',)`; it validates the `meta.json` geometry keys and holds
+no simulated-hours scalar; a sample is one uniformly drawn arm of one row, the
+context cropped from the right end, the arm's tail doses the horizon input and
+its tail BG the target; and it reads `skills.npy` per sample. Its un-cached path
+calls `T1DMSIM`'s own row builder, so cached and simulated rows cannot drift.
+`docs/` carries `COMPARISON.md` and `INFERENCE.md` and no cache stub;
+`ARCHITECTURE.md`, `CLAUDE.md` and `config.py` name `cache.md` by path, so an
+agent entering by the repository's own files reaches the contract.
 
 **Regenerate normalization statistics from the actual training cache**, not from
 a re-simulation — the re-simulate path skips the cache's hypoglycemia
@@ -87,16 +84,12 @@ loose file is only what an untrained run needs.
 ## Input layouts
 
 `train.py` and `finetune.py` take `--inputs curves|events`. `curves` is
-`bg_absolute`, `carb_intake`, `insulin_combined`, `exercise_equiv` and the mask
-bit; `events` replaces the two action curves with `T1DMSIM`'s nine point-dose
-channels — `carb_g`, `carb_gi`, `bolus_u`, `bolus_peak_min`, `bolus_dur_h`,
-`basal_u`, `basal_peak_min`, `basal_dur_h`, `exercise_min`, each dose at its
-onset step — read from a cache built with `cache_simulator.py --events`, whose
-`normalization_stats_events.json` is its statistics. `normalization.py` pins the
-normalized counts at 4 and 10; `../SPEC/inference.md` §6 fixes `curves` at three
-channels plus the mask bit, and `events` follows `T1DMSIM`'s `EVENT_CHANNELS`,
-which still carries `exercise_min`, so both counts fall by one with the deviation
-above. A checkpoint is stamped
+`bg_absolute`, `carb_intake`, `insulin_combined` and the mask bit; `events`
+replaces the two action curves with `T1DMSIM`'s eight `EVENT_CHANNELS`, each
+dose at its onset step, read from a cache built with `cache_simulator.py
+--events`, whose `normalization_stats_events.json` is its statistics.
+`normalization.py` pins the normalized counts at 3 and 9 — `../SPEC/inference.md`
+§6 fixes the first, `T1DMSIM`'s `EVENT_CHANNELS` the second. A checkpoint is stamped
 `input_layout` and is one or the other. An `events` checkpoint does not export:
 the descriptor and the on-device feature builder are `curves` only.
 
