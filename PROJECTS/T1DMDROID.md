@@ -75,14 +75,13 @@ in the shape the exporter writes rather than projecting it onto a second schema.
 live deviation.** `crates/t1dm-core/src/preproc.rs` pins the feature count at 5
 and requires an `exercise_equiv` entry in the descriptor's `normalization_stats`,
 while `../SPEC/inference.md` §6–7 fixes the input at three channels and four
-features. The current trainer emits exactly those five, so its descriptor loads
-and one built to the specification is refused. Two comments
-sit on the same seam: `ExerciseDisposal.kt` calls its default rate `T1DMSIM`'s
-population constant, and `ExerciseDisposalTest.kt` calls an intensity-scaled
-magnitude off-distribution for models pretrained on `T1DMSIM` — neither holds
-once `T1DMSIM` drops the channel and no model input carries it. The app keeps its
-exercise record and its panels; the model input and those two comments move in a
-task of their own.
+features. `T1DMAI` emits those four, so the phone refuses every descriptor the
+current trainer writes. Two comments sit on the same seam:
+`ExerciseDisposal.kt` calls its default rate `T1DMSIM`'s population constant,
+and `ExerciseDisposalTest.kt` calls an intensity-scaled magnitude
+off-distribution for models pretrained on `T1DMSIM` — `T1DMSIM` has no such
+constant and no such distribution. The app keeps its exercise record and its
+panels; the model input and those two comments move in a task of their own.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
 selection matrix naming the patch each head slot reads, so forecast, backcast and
