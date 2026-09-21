@@ -71,17 +71,14 @@ constants — the app never parses a checkpoint pickle, and parses the descripto
 in the shape the exporter writes rather than projecting it onto a second schema.
 `../SPEC/invariants.md` §4 says why those constants come from the descriptor.
 
-**The model input still carries exercise, and the specification does not — a
-live deviation.** `crates/t1dm-core/src/preproc.rs` pins the feature count at 5
-and requires an `exercise_equiv` entry in the descriptor's `normalization_stats`,
-while `../SPEC/inference.md` §6–7 fixes the input at three channels and four
-features. `T1DMAI` emits those four, so the phone refuses every descriptor the
-current trainer writes. Two comments sit on the same seam:
-`ExerciseDisposal.kt` calls its default rate `T1DMSIM`'s population constant,
-and `ExerciseDisposalTest.kt` calls an intensity-scaled magnitude
-off-distribution for models pretrained on `T1DMSIM` — `T1DMSIM` has no such
-constant and no such distribution. The app keeps its exercise record and its
-panels; the model input and those two comments move in a task of their own.
+**The model input carries no exercise.** `crates/t1dm-core/src/preproc.rs` pins
+the four features of `../SPEC/inference.md` §6–7 and refuses a descriptor
+declaring any other count. The app keeps its exercise record and its panels, and
+none of it reaches a forecast. Two comments are stale: `ExerciseDisposal.kt`
+calls its default rate `T1DMSIM`'s population constant, and
+`ExerciseDisposalTest.kt` calls an intensity-scaled magnitude off-distribution
+for models pretrained on `T1DMSIM` — `T1DMSIM` has no such constant and no such
+distribution.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
 selection matrix naming the patch each head slot reads, so forecast, backcast and
@@ -162,8 +159,7 @@ publishes no forecast, and neither does the warm-up window.
 replays the last 1–14 days through one model as it runs now — offset, adapter,
 smoothing — one forecast per measured slot, each built from what the phone held
 when that reading arrived: readings by receipt, meals and doses by `loggedAtMs`,
-fills and promoted reconstructions by the fill's creation. Exercise is read as
-stored: `sample` keeps merged grams with no per-bout write time. The replayed
+fills and promoted reconstructions by the fill's creation. The replayed
 forecasts are paired with realized BG by the stored forecasts' rule and scored by
 the same suite. Nothing is written to `prediction`; nothing reaches the band fit,
 the hindsight sweep, an alarm or a dose. An attached adapter scores in-sample on

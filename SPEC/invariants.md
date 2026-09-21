@@ -507,14 +507,6 @@ repository. An entry is **deleted** once the implementation agrees.
    reach the JNI seam. The client's golden vectors pin the current bound and need
    regenerating alongside the change.
 
-2. **`T1DMDROID`'s model input carries exercise.** §3 and §5 leave the disposal
-   curve to that repository's record and put it in no model input.
-   `crates/t1dm-core/src/preproc.rs` pins `N_FEAT` at 5, refuses a descriptor
-   declaring any other count and requires a
-   `normalization_stats.exercise_equiv` entry. `T1DMAI` now exports four
-   features and three statistics keys, so the phone refuses every descriptor the
-   current trainer writes.
-
 ## Accepted divergences
 
 Differences a reviewer will read as drift. They are deliberate. **Do not "fix"

@@ -107,8 +107,8 @@ reject a version it does not know, but that makes the string a hard gate, and
 every consumer holding such a gate must be re-pointed in the same change that
 moves `T1DMAI/config.py`'s `ARCH_VERSION`. An artifact whose version no shipped
 consumer accepts must not be deployed. `T1DMDROID` accepts `risk-v5` only
-(`crates/t1dm-core/src/preproc.rs:23`, `testdata/reference_descriptor.json:8`,
-the `Inference.kt:70` comment); those three move with `ARCH_VERSION`.
+(`crates/t1dm-core/src/preproc.rs:19`, `testdata/reference_descriptor.json:8`,
+the `Inference.kt:60` comment); those three move with `ARCH_VERSION`.
 
 ### 2.2 Which weights to run
 

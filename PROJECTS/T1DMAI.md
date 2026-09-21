@@ -11,7 +11,7 @@ What `ARCH_VERSION = 'risk-v5'` carries that matters across the suite:
 
 **No input or target smoothing.** The causal Savitzky-Golay smoother was deleted.
 Inputs, the forecast target and the anchor are the raw post-noise simulator
-signals, glucose clamped to `[10, 400]` and carbohydrate/insulin floored at zero.
+signals, glucose clamped to `[1, 400]` and carbohydrate/insulin floored at zero.
 `scipy` is not a dependency.
 
 **Kovatchev re-anchored to `[40, 400]`** — `../SPEC/invariants.md` §4 for the
@@ -26,9 +26,7 @@ production, normalisation, export, GUI or metric path reads it, and the exported
 descriptor declares four features with three statistics keys.
 `../SPEC/inference.md` §6 fixes that input and what carbohydrate and insulin
 mean in it; `../SPEC/invariants.md` §3 and §5 keep the unit and the disposal
-curve for `T1DMDROID`'s record alone. That repository still pins five features,
-so no descriptor exported here loads on the phone — `../SPEC/invariants.md`
-known deviation 2.
+curve for `T1DMDROID`'s record alone.
 
 **The forecast is one case of a masked-BG objective.** A masked span at the right
 edge of the window is a forecast, one at the left edge a backcast, anything else
