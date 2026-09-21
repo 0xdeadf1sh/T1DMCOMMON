@@ -507,19 +507,13 @@ repository. An entry is **deleted** once the implementation agrees.
    reach the JNI seam. The client's golden vectors pin the current bound and need
    regenerating alongside the change.
 
-2. **Two model inputs carry exercise.** §3 and §5 leave the disposal curve to
-   `T1DMDROID`'s record and put it in no model input.
-   `T1DMDROID/crates/t1dm-core/src/preproc.rs` pins `N_FEAT` at 5, refuses a
-   descriptor declaring any other count and requires a
-   `normalization_stats.exercise_equiv` entry; `T1DMAI/config.py` ends its
-   `curves` layout in `exercise_equiv` and `normalization.py` pins that count at
-   4. The two move together or no model loads.
-
-3. **`T1DMSIM` exercises its patients.** §3 and §5 bind the channel to
-   `T1DMDROID` alone. `simulator.py` carries the
-   `exercise_duration_mean_min` patient field, the `exercise_min` event channel,
-   the `total_exercise` step key and the post-session sensitivity reduction, and
-   `cache_simulator.py` normalizes `total_exercise` as `exercise_equiv`.
+2. **`T1DMDROID`'s model input carries exercise.** §3 and §5 leave the disposal
+   curve to that repository's record and put it in no model input.
+   `crates/t1dm-core/src/preproc.rs` pins `N_FEAT` at 5, refuses a descriptor
+   declaring any other count and requires a
+   `normalization_stats.exercise_equiv` entry. `T1DMAI` now exports four
+   features and three statistics keys, so the phone refuses every descriptor the
+   current trainer writes.
 
 ## Accepted divergences
 
