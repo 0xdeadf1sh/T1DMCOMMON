@@ -21,19 +21,14 @@ One row is one patient on the five-minute grid:
 ```
 48 h warm-up + U{0..287} extra steps    # a random start hour, drawn per row
 2016 steps of context                   # 7 d = 336 patches of 6, behaviour ON
-4 paired tails of 48 steps              # 4 h per arm, behaviour OFF
+4 paired tails of 24 steps              # 2 h per arm, behaviour OFF
 ```
 
 Those three numbers are not free. The context is `MAX_CONTEXT_PATCHES ×
-PATCH_SIZE` and a tail is `(PREDICTION_PATCHES + TAIL_VISIBLE_PATCHES) ×
-PATCH_SIZE` with `TAIL_VISIBLE_PATCHES = 4`, the first two from `inference.md`
-§11, and the offset spans one day on the grid — `288` steps. A cache built to any
-other arithmetic trains a model that cannot consume it, so the two documents move
-together.
-
-The forecast span is tail steps `0..23`. The remaining 24 steps are visible
-input: a training window never ends at the forecast span, so the span's last
-patch has visible patches after it, like any interior span.
+PATCH_SIZE` and a tail is `PREDICTION_PATCHES × PATCH_SIZE`, both from
+`inference.md` §11, and the offset spans one day on the grid — `288` steps. A
+cache built to any other arithmetic trains a model that cannot consume it, so the
+two documents move together.
 
 The extra warm-up offset lands the boundary on a uniform hour of day.
 It moves the warm-up, never the simulator clock.
@@ -43,7 +38,7 @@ The context ends **at the boundary**, so a consumer taking fewer than
 
 At the boundary the simulator is deep-copied once per arm, behaviour is switched
 off in the copy, the arm's dose is injected at tail step 0 — the first step after
-the context — and 48 steps run.
+the context — and 24 steps run.
 
 ## 2. Behaviour off
 
@@ -119,7 +114,7 @@ them:
 
 | path | shape | contents |
 | --- | --- | --- |
-| `tail_<channel>.b2nd` | `(pool_size, 4, 48)` | a per-step channel over the four arms |
+| `tail_<channel>.b2nd` | `(pool_size, 4, 24)` | a per-step channel over the four arms |
 | `tail_dose_<event_channel>.b2nd` | `(pool_size, 4)` | the boundary point dose, under `--events`; `0` where the arm has no such dose |
 | `skills.npy` | `(pool_size, 4)` float32 | the patient skills, written like `icr.npy` |
 
@@ -136,10 +131,10 @@ apart on disk, and a name is never shared between the two ranks.
 
 | key | value |
 | --- | --- |
-| `cache_format` | `blosc2-ndarray-v4` |
+| `cache_format` | `blosc2-ndarray-v3` |
 | `n_timesteps` | `2016`, the context alone |
 | `context_steps` | `2016` |
-| `tail_steps` | `48` |
+| `tail_steps` | `24` |
 | `tail_arms` | `["none", "bolus", "carbs", "bolus_carbs"]` |
 | `tail_channels` | the channel names behind the `tail_` arrays |
 
