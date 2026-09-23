@@ -65,8 +65,8 @@ cache, which also emits `normalization_stats.json` beside `meta.json`.
 `('blosc2-ndarray-v3',)`; it validates the `meta.json` geometry keys and holds
 no simulated-hours scalar; a sample is one uniformly drawn arm of one row, the
 context cropped from the right end, the arm's tail doses the horizon input and
-its tail BG the target; and it reads `skills.npy` per sample. Its un-cached path
-calls `T1DMSIM`'s own row builder, so cached and simulated rows cannot drift.
+its tail BG the target. Its un-cached path calls `T1DMSIM`'s own row builder,
+so cached and simulated rows cannot drift.
 `docs/` carries `COMPARISON.md` and `INFERENCE.md` and no cache stub;
 `ARCHITECTURE.md`, `CLAUDE.md` and `config.py` name `cache.md` by path, so an
 agent entering by the repository's own files reaches the contract.

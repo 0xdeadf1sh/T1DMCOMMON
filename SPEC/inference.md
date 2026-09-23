@@ -119,7 +119,7 @@ Merge the EMA shadow over the live weights, then load:
 sd     = ckpt["model_state_dict"]
 ema    = ckpt.get("model_ema_state_dict")
 merged = {k: ema.get(k, v) for k, v in sd.items()} if ema else dict(sd)
-model.load_state_dict(merged, strict=False)   # strict=False tolerates the aux heads
+model.load_state_dict(merged, strict=False)   # strict=False tolerates a time_head mismatch
 model.eval()
 ```
 
@@ -129,10 +129,9 @@ For distribution, drop `muon_optimizer_state_dict`, `adam_optimizer_state_dict`,
 `weighting_state_dict` and all telemetry; that shrinks the file to roughly the
 model size. Keep the EMA weights (or a pre-merged state dict),
 `normalization_stats`, and enough of `training_config` (or the shapes) to rebuild
-the graph. Two auxiliary heads never touch the BG forecast and may be dropped:
-`time_head.*`, an hour-of-day probe, and `skill_head.*`, the four patient skills
-in `cache.md` §6's column order. Neither is exported, and neither appears in the
-descriptor.
+the graph. Keep `time_head.*`, the hour-of-day probe: it never touches the BG
+forecast, but the export emits its logits as the `time_logits` output the
+descriptor names.
 
 ---
 
