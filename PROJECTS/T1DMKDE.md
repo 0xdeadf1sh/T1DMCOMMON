@@ -37,5 +37,5 @@ waits for the adapter to be powered and never powers it on.
 
 - `cargo test` — link state machine, model, store.
 - `tools/render.sh` on `t1dmkd sample` output — offscreen renders at seven
-  resolutions, fresh and aged. Layouts: one row at 2:1 and wider, a split row on
-  landscape, stacked panels in portrait.
+  resolutions, fresh and aged. One layout: text rows across the top, the graph
+  edge to edge below.
