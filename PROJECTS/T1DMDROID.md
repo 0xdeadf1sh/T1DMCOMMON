@@ -1,11 +1,11 @@
 # T1DMDROID — working knowledge
 
 The Android app: reads the CGM, runs forecasting on device, owns the patient's
-data, drives an optional BLE watch, and can mirror a subset outward — see
-*Outbound destinations*.
+data, pushes to paired BLE peripherals over the watch link, and can mirror a
+subset outward — see *Outbound destinations*.
 
 Kotlin + Compose, multi-module Gradle, with a Rust core (`crates/t1dm-core`) over
-JNI. GPL-3.0. Sideload-only, never a store listing. Targets exactly one phone.
+JNI. MIT. Sideload-only, never a store listing. Targets exactly one phone.
 
 > Some of this project's knowledge is **deliberately not here**: device protocol
 > work, the branch seam, and safety-override design stay in the project's own
@@ -339,18 +339,27 @@ changed since it last worked, and inspect the resolved dependency graph for
 transitive version bumps before touching build flags. A version pin that restores
 the known-good state beats switching off an optimization the author wants on.
 
-## Watch accessory
+## Watch link
 
-Optional; the app is fully functional without it. Data flows **phone → watch
-only**, pushed periodically: current glucose, trend, a one-line forecast summary,
-alerts, status. No images.
+Optional; the app is fully functional without it. `../SPEC/watch.md` is the
+contract. The phone is the central and holds any number of pairings, one link
+each; the ESP32 watch is not built, and `T1DMKDE` is the peripheral in use.
 
-BLE GATT with the phone as central. Security is **app-layer AES-128-GCM** as the
-source of truth — per-direction keys, monotonic nonce, X25519 key agreement on
-first pair confirmed by a short authentication string on both ends — over a
-bonded link for defence in depth only. Manual key rotation and session reset are
-exposed. The hardware is not built; the phone side is validated against a desktop
-BLE peripheral emulator.
+The session crypto and every frame and record codec are the Rust crate
+`crates/t1dm-watch`, which `T1DMKDE` builds from this checkout by path;
+`crates/t1dm-core/src/watch.rs` is only its uniffi face, and `:watch` reaches it
+through the `WatchCodec` port. The GATT UUIDs in `WatchGatt` are the one second
+copy, pinned to the crate's `records_golden.json` by `WatchGattGoldenTest`.
+
+ERR_EPOCH, ERR_AUTH and a STATUS epoch mismatch never touch keys: the link shows
+the pairing refused and retries at the backoff ceiling. A rotation handshakes on a
+separate session and keeps the live keys until the peripheral confirms.
+
+Pairing runs from the Security panel, or on debug builds from the `WATCH_*`
+broadcasts (`docs/WATCH_BLE.md`). A reconnect tries the cached address first, a direct
+connect that needs no scan; the scan by name, which the screen-lock suspension
+above stops, is the fallback. Pairings made before multi-device support named no
+device and are dropped on first start: re-pair.
 
 ## Working with the author on this project
 

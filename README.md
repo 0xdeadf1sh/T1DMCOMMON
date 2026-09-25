@@ -1,13 +1,14 @@
 # T1DMCOMMON
 
-Shared specifications and working rules for the T1DM suite — three repositories
-that between them implement one physiology and one model contract.
+Shared specifications and working rules for the T1DM suite — four repositories
+that between them implement one physiology, one model contract and one watch link.
 
 | Repository | Role |
 | --- | --- |
 | [T1DMSIM](https://github.com/0xdeadf1sh/T1DMSIM) | Behavioural simulator; generates the synthetic traces the model pretrains on |
 | [T1DMAI](https://github.com/0xdeadf1sh/T1DMAI) | Training and ExecuTorch export; produces the model artifact and its descriptor |
 | [T1DMDROID](https://github.com/0xdeadf1sh/T1DMDROID) | The Android app; reads the CGM, runs inference on device, owns the patient's data |
+| [T1DMKDE](https://github.com/0xdeadf1sh/T1DMKDE) | A KDE Plasma wallpaper showing what the phone pushes over the watch link |
 
 > [!CAUTION]
 > **Research and educational use only.** The T1DM projects are personal research
@@ -20,14 +21,15 @@ that between them implement one physiology and one model contract.
 
 Some facts are needed in more than one repository: the five-minute grid, the
 physiologic units, the Kovatchev risk transform, the curve mathematics, the
-forecast layout, the model contract the app decodes against, and the shape of the
-cache the model pretrains on. Each is written down once, here. A project that
+forecast layout, the model contract the app decodes against, the shape of the
+cache the model pretrains on, and the watch link the phone pushes over. Each is
+written down once, here. A project that
 needs one keeps a stub at the path its readers expect, pointing back.
 
 Duplicated facts drift. Both copies are correct the day they are written and
 disagree later, silently — the software keeps working and one side is wrong.
 
-The obligation runs both ways: a change in one of the three projects that
+The obligation runs both ways: a change in one of the four projects that
 contradicts something written here is also a change to this repository.
 Everything here is present tense and describes the suite as it stands.
 
@@ -39,12 +41,14 @@ SPEC/
   invariants.md    the grid, units, risk spaces, curve semantics, forecast layout
   inference.md     the model contract: checkpoint, graph, decode, constants
   cache.md         the pretraining cache: row geometry, tails, arrays, meta
+  watch.md         the watch link: pairing, session crypto, record layouts
 scripts/
   check-no-copies.sh   fails when a specification has been copied into a project
 PROJECTS/
   T1DMSIM.md       per-project working knowledge: constraints, traps, gates,
   T1DMAI.md        and the conventions each project's author has settled on
   T1DMDROID.md
+  T1DMKDE.md
 skills/
   enter-project/            orientation ritual before working on a sister project
   shared-contract-change/   protocol for changing anything shared
@@ -53,13 +57,14 @@ skills/
 
 ## Use
 
-The three projects are sibling checkouts of this one:
+The four projects are sibling checkouts of this one:
 
 ```
 ├── T1DMCOMMON     <- you are here
 ├── T1DMSIM
 ├── T1DMAI
-└── T1DMDROID
+├── T1DMDROID
+└── T1DMKDE
 ```
 
 Work begins here, so the shared rules are in hand before any code is. `CLAUDE.md`

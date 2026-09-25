@@ -7,16 +7,17 @@ correct without checking the other.
 Each invariant records which repositories it binds. `../CLAUDE.md` holds the
 active/passive distinction that governs how strongly.
 
-Two companion specifications apply these definitions to a particular seam and are
-equally normative: `inference.md`, the model contract between the trainer and the
-app, and `cache.md`, the pretraining-cache contract between the simulator and the
-trainer. All three are single-copy — see `../scripts/check-no-copies.sh`.
+Three companion specifications apply these definitions to a particular seam and
+are equally normative: `inference.md`, the model contract between the trainer and
+the app; `cache.md`, the pretraining-cache contract between the simulator and the
+trainer; and `watch.md`, the link from the app to its BLE peripherals. All four
+are single-copy — see `../scripts/check-no-copies.sh`.
 
 ---
 
 ## 1. The five-minute grid
 
-*Binds: all three.*
+*Binds: all four.*
 
 Physiologic samples, meal events and dose events sit on a fixed five-minute grid
 in epoch milliseconds:
@@ -48,7 +49,7 @@ measurement. A carry-forward or interpolated value gets no such route.
 
 ## 2. `tz_offset`
 
-*Binds: all three.*
+*Binds: `T1DMSIM`, `T1DMAI`, `T1DMDROID`.*
 
 `tz_offset` is the client's UTC offset **in minutes, east-positive**, at the time
 of the event. `UTC−5` is `-300`.
@@ -68,7 +69,7 @@ lag apart, so a constant offset cancels.
 
 ## 3. Units and sign conventions
 
-*Binds: all three.*
+*Binds: all four.*
 
 Storage units are fixed. Display conversion is presentation-only and never
 written back.
@@ -103,7 +104,7 @@ nine: 100 mg/dL prints as `5.6` under 18.0 and `5.5` under 18.0182.
 
 ## 4. The two risk spaces
 
-*Binds: all three. The most easily conflated pair in the suite.*
+*Binds: `T1DMSIM`, `T1DMAI`, `T1DMDROID`. The most easily conflated pair in the suite.*
 
 Two Kovatchev parameterizations coexist **by design**. They are numerically
 similar, dimensionally incompatible, and must never be mixed.
@@ -197,7 +198,7 @@ and the rail-pinned degeneracy test alike. A rail-pin check against a fixed
 
 ## 5. Curve semantics
 
-*Binds: all three.*
+*Binds: `T1DMSIM`, `T1DMAI`, `T1DMDROID`.*
 
 A curve is a **per-five-minute rate series that sums to the event's total**. It is
 never an amount-in-body.
@@ -302,7 +303,7 @@ authoritative and is never re-derived from the parameters beside it.
 
 ## 6. Forecast layout
 
-*Binds: `T1DMAI` → `T1DMDROID`.*
+*Binds: `T1DMAI` → `T1DMDROID` → `T1DMKDE`.*
 
 A prediction carries a median line, a seven-level quantile fan, and a twelve-bin
 circadian distribution with a confidence scalar.

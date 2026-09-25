@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fingerprint scan for copies of SPEC/ in the three siblings. Exit 0 clean, 1 copy, 2 no run.
+# Fingerprint scan for copies of SPEC/ in the sibling checkouts. Exit 0 clean, 1 copy, 2 no run.
 
 set -uo pipefail
 
 ROOT="${1:-..}"
-PROJECTS=(T1DMSIM T1DMAI T1DMDROID)
+PROJECTS=(T1DMSIM T1DMAI T1DMDROID T1DMKDE)
 THRESHOLD=3
 
 TARGETS=()
@@ -38,13 +38,20 @@ What the model sees is the patient's record, not the physiology
 is never rejected, whatever it does
 geometry is in the cache, not in a constant the reader holds
 EOF
+cat >"$PATDIR/watch" <<'EOF'
+minted once per peripheral, stable across pairings
+only after its own user confirms; the keys go live on that
+that no central drives; a peripheral does not implement it
+slot it covers, empty ones included
+are unauthenticated, so none touches a key. The central drops the connection
+EOF
 
 # One recursive pass per spec. --include keeps it to text the suite authors;
 # --exclude-dir keeps build output, VCS metadata and artifacts out of the walk.
 scan() {
   grep -rHoFf "$1" \
     --include='*.md' --include='*.txt' --include='*.rs' --include='*.kt' \
-    --include='*.py' --include='*.kts' --include='*.toml' \
+    --include='*.py' --include='*.kts' --include='*.toml' --include='*.qml' \
     --exclude-dir=.git --exclude-dir=target --exclude-dir=build \
     --exclude-dir=.gradle --exclude-dir=.kotlin --exclude-dir=node_modules \
     --exclude-dir=.venv --exclude-dir=__pycache__ \
@@ -69,6 +76,7 @@ printf 'Checking %s\n\n' "${TARGETS[*]}"
 check_spec 'SPEC/inference.md'  "$PATDIR/inference"
 check_spec 'SPEC/invariants.md' "$PATDIR/invariants"
 check_spec 'SPEC/cache.md'      "$PATDIR/cache"
+check_spec 'SPEC/watch.md'      "$PATDIR/watch"
 
 if [ $fail -ne 0 ]; then
   cat <<'EOF'

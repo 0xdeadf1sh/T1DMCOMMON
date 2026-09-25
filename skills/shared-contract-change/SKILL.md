@@ -3,7 +3,7 @@ name: shared-contract-change
 description: >-
   MANDATORY before changing anything the T1DM sister repositories share — the five-minute grid,
   tz_offset, physiologic units or scales, either Kovatchev risk space, the curve mathematics, the
-  quantile/circadian forecast layout, or the model descriptor format. These concepts exist in more
+  quantile/circadian forecast layout, the model descriptor format, or the watch link. These exist in more
   than one repository, in more than one language, and drift between them is silent — both sides
   keep working and one of them is wrong. Triggers: editing curve.rs, units.rs, KovatchevRisk.kt,
   GridStamper.kt, an exporter, or any constant this document names.
@@ -23,10 +23,10 @@ Read `SPEC/invariants.md` for the concept, then find **every** implementation of
 it. Do not assume there are two — the Kovatchev transform was found in six
 places across three repositories and three languages.
 
-Search all three sibling checkouts:
+Search all four sibling checkouts:
 
 ```
-rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID
+rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID ../T1DMKDE
 ```
 
 List what was found before proceeding. A surprising count is itself the finding;
