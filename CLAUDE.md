@@ -77,7 +77,7 @@ Two are **active** — running software that holds a patient's live record:
 | Repository | Role | Language |
 | --- | --- | --- |
 | `T1DMDROID` | The Android app. Reads the CGM, runs inference on device, owns the patient's data. | Kotlin + Rust |
-| `T1DMKDE` | A Plasma wallpaper and its BLE daemon. Shows what the phone pushes over the watch link. | Rust + QML |
+| `T1DMKDE` | A Plasma wallpaper, a panel widget, and their BLE daemon. Shows what the phone pushes over the watch link. | Rust + QML |
 
 Two are **passive** — offline tooling, run by hand, not part of any running
 system:

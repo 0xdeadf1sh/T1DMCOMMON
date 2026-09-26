@@ -8,7 +8,7 @@ that between them implement one physiology, one model contract and one watch lin
 | [T1DMSIM](https://github.com/0xdeadf1sh/T1DMSIM) | Behavioural simulator; generates the synthetic traces the model pretrains on |
 | [T1DMAI](https://github.com/0xdeadf1sh/T1DMAI) | Training and ExecuTorch export; produces the model artifact and its descriptor |
 | [T1DMDROID](https://github.com/0xdeadf1sh/T1DMDROID) | The Android app; reads the CGM, runs inference on device, owns the patient's data |
-| [T1DMKDE](https://github.com/0xdeadf1sh/T1DMKDE) | A KDE Plasma wallpaper showing what the phone pushes over the watch link |
+| [T1DMKDE](https://github.com/0xdeadf1sh/T1DMKDE) | A KDE Plasma wallpaper and panel widget showing what the phone pushes over the watch link |
 
 > [!CAUTION]
 > **Research and educational use only.** The T1DM projects are personal research
