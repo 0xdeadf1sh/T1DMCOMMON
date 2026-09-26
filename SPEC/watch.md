@@ -168,13 +168,14 @@ off type  field
 10  u8    fc_horizon_steps
 11  u8    fc_trend           0 FLAT, 1 RISING, 2 FALLING, 3 RISING_FAST, 4 FALLING_FAST
 12  u32   reading_age_s      since the last measured reading
-16  u8    bg_trend           the measured rate's direction, as fc_trend; 0xFF = none
+16  u8    bg_trend           bits 0–6 the direction, as fc_trend; bit 7 FITTED; 0xFF = none
 17  u8    summary_len N      N ≤ 40
 18  N     summary            UTF-8
 ```
 
-`bg_trend` is the direction the phone draws beside its reading. A peripheral shows it as sent
-and never derives one from `trend_tenths`.
+`bg_trend` is the direction the phone draws beside its reading: the sensor's reported rate, or,
+with FITTED set, the slope the phone fits when the sensor reports none. A peripheral shows it as
+sent and never derives one from `trend_tenths`.
 
 | bit | status |
 | --- | --- |
