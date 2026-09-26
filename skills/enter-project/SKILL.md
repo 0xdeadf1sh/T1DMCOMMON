@@ -3,7 +3,7 @@ name: enter-project
 description: >-
   Run this FIRST, before any work on a T1DM sister project. The harness starts in T1DMCOMMON, which
   holds the suite's shared rules but none of its code — the projects are sibling checkouts at
-  ../T1DMSIM, ../T1DMAI, ../T1DMDROID and ../T1DMKDE. This skill is the orientation ritual: which
+  ../T1DMSIM, ../T1DMAI, ../T1DMDROID, ../T1DMKDE and ../T1DMAUTO. This skill is the orientation ritual: which
   files to read before touching a project, in what order, and what each project's local gates are.
   Triggers: any request naming a sister project, "work on the app", "retrain",
   "the simulator", or any task whose files are not in T1DMCOMMON itself.
@@ -18,7 +18,7 @@ discover after a mistake.
 ## 1. Identify the project and confirm the path
 
 Map the request to exactly one of `../T1DMSIM`, `../T1DMAI`, `../T1DMDROID`,
-`../T1DMKDE`. A
+`../T1DMKDE`, `../T1DMAUTO`. A
 request spanning two is a cross-repository change: read
 `shared-contract-change` as well, and still write to only one.
 
@@ -34,7 +34,7 @@ In order:
 - `../<PROJECT>/.claude/skills/*/SKILL.md` — at minimum every description
 - `../<PROJECT>/docs/` — the interface documentation relevant to the task
 
-All four projects carry a `CLAUDE.md`, and it holds the local rules this
+All five projects carry a `CLAUDE.md`, and it holds the local rules this
 repository deliberately does not: `T1DMDROID`'s two-branch and build-both
 discipline, for one. Skills bind separately; a project with
 none is still bound by `../CLAUDE.md` and `SPEC/`.
@@ -57,6 +57,9 @@ Current at the time of writing — verify against the project:
 - **`T1DMKDE`** — builds against `../T1DMDROID/crates/t1dm-watch`; after any QML
   change, the offscreen render check in its `CLAUDE.md`. Never commit a snapshot
   or a render made from real data.
+- **`T1DMAUTO`** — builds against `../T1DMDROID/crates/t1dm-watch`; after any
+  drawing change, `tools/render.sh` on the phone, sample mode only. Live mode
+  renames the device's Bluetooth adapter, so it runs only on the head unit.
 
 ## 4. Check whether the task is shared
 

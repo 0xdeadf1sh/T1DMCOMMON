@@ -7,7 +7,7 @@ repository holds the specifications and rules the suite shares. The software
 lives in sibling checkouts, one directory up:
 
 ```
-../T1DMSIM      ../T1DMAI      ../T1DMDROID      ../T1DMKDE
+../T1DMSIM      ../T1DMAI      ../T1DMDROID      ../T1DMKDE      ../T1DMAUTO
 ```
 
 Before doing anything in a project, read, in this order:
@@ -28,6 +28,7 @@ Before doing anything in a project, read, in this order:
 | `../T1DMAI` | yes | — | `INFERENCE.md` → `SPEC/inference.md` |
 | `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`; `INFERENCE.md` → `SPEC/inference.md`; `WATCH_BLE.md` → `SPEC/watch.md` |
 | `../T1DMKDE` | yes | `kde-apply` | — |
+| `../T1DMAUTO` | yes | — | — |
 
 `CGM.md` must **never** be promoted here, in any part: see *What must never enter
 this repository*.
@@ -70,14 +71,15 @@ Three cautions:
 - **Do not write a shared fact into a memory.** A memory is local, private and
   unversioned. A fact true for more than one project belongs in `SPEC/`.
 
-## The four repositories, and how they differ
+## The five repositories, and how they differ
 
-Two are **active** — running software that holds a patient's live record:
+Three are **active** — running software that holds a patient's live record:
 
 | Repository | Role | Language |
 | --- | --- | --- |
 | `T1DMDROID` | The Android app. Reads the CGM, runs inference on device, owns the patient's data. | Kotlin + Rust |
 | `T1DMKDE` | A Plasma wallpaper, a panel widget, and their BLE daemon. Shows what the phone pushes over the watch link. | Rust + QML |
+| `T1DMAUTO` | An Android app for a car head unit. Shows the reading, 6 h of history and the forecast the phone pushes over the watch link. | Kotlin + Rust |
 
 Two are **passive** — offline tooling, run by hand, not part of any running
 system:
@@ -88,7 +90,7 @@ system:
 | `T1DMAI` | Training and ExecuTorch export. Produces the model artifact and its descriptor. | Python |
 
 This governs how strongly each shared fact binds. A disagreement that reaches
-`T1DMDROID` or `T1DMKDE` at run time is a live defect: it misreads, misstores or
+`T1DMDROID`, `T1DMKDE` or `T1DMAUTO` at run time is a live defect: it misreads, misstores or
 misdisplays a patient record. One confined to the passive repositories surfaces at
 the next training or export run, where a human is present.
 
@@ -118,7 +120,7 @@ scripts/check-no-copies.sh          # 0 = clean, 1 = a copy exists
 ```
 
 `check-no-copies.sh` fingerprints each specification with a handful of its own
-sentences and scans the four sibling checkouts, so it catches a copy under any
+sentences and scans the five sibling checkouts, so it catches a copy under any
 filename, and a specification pasted into a source comment as readily as into a
 document. Editing a fingerprinted sentence silently disarms that fingerprint —
 change the script in the same commit. Run it before you finish anything that
@@ -152,24 +154,24 @@ Changing any of these in one repository obliges you to check its counterparts:
 
 | Concept | Written in | Binds |
 | --- | --- | --- |
-| The five-minute grid, timestamps | `SPEC/invariants.md` §1 | all four |
+| The five-minute grid, timestamps | `SPEC/invariants.md` §1 | all five |
 | `tz_offset` | `SPEC/invariants.md` §2 | `T1DMSIM`, `T1DMAI`, `T1DMDROID` |
-| Physiologic units, scales, sign conventions | `SPEC/invariants.md` §3 | all four |
+| Physiologic units, scales, sign conventions | `SPEC/invariants.md` §3 | all five |
 | The two risk spaces | `SPEC/invariants.md` §4 | `T1DMSIM`, `T1DMAI`, `T1DMDROID` |
 | Meal-appearance and insulin-action curve mathematics | `SPEC/invariants.md` §5 | `T1DMSIM`, `T1DMAI`, `T1DMDROID` |
-| Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` → `T1DMKDE` |
+| Quantile levels and order, horizon, circadian bins | `SPEC/invariants.md` §6, `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` → `T1DMKDE`, `T1DMAUTO` |
 | The metric levels, band projection, CG-EGA anchoring | `SPEC/invariants.md` §6.1–6.3 | `T1DMAI` ↔ `T1DMDROID` |
 | The model descriptor format, graph cut, decode | `SPEC/inference.md` | `T1DMAI` → `T1DMDROID` |
 | The pretraining cache: row geometry, tail arms, doses, meta keys | `SPEC/cache.md` | `T1DMSIM` → `T1DMAI` |
 | The conformal band correction — its apply AND its fit | `SPEC/inference.md` §8.4 | `T1DMAI` ↔ `T1DMDROID` |
-| The watch link: pairing, session crypto, record layouts | `SPEC/watch.md` | `T1DMDROID` → `T1DMKDE` |
+| The watch link: pairing, session crypto, record layouts | `SPEC/watch.md` | `T1DMDROID` → `T1DMKDE`, `T1DMAUTO` |
 
 Anything on that list is a cross-repository change. Read
 `skills/shared-contract-change` before touching it.
 
 ## Safety stance
 
-All four projects are research artifacts and advisory only. None is a medical
+All five projects are research artifacts and advisory only. None is a medical
 device; none is clinically validated. No component may actuate insulin delivery.
 Every repository carries a disclaimer to this effect in its README — keep them
 consistent in substance, and never weaken one.

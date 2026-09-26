@@ -1,6 +1,6 @@
 # T1DMCOMMON
 
-Shared specifications and working rules for the T1DM suite — four repositories
+Shared specifications and working rules for the T1DM suite — five repositories
 that between them implement one physiology, one model contract and one watch link.
 
 | Repository | Role |
@@ -9,6 +9,7 @@ that between them implement one physiology, one model contract and one watch lin
 | [T1DMAI](https://github.com/0xdeadf1sh/T1DMAI) | Training and ExecuTorch export; produces the model artifact and its descriptor |
 | [T1DMDROID](https://github.com/0xdeadf1sh/T1DMDROID) | The Android app; reads the CGM, runs inference on device, owns the patient's data |
 | [T1DMKDE](https://github.com/0xdeadf1sh/T1DMKDE) | A KDE Plasma wallpaper and panel widget showing what the phone pushes over the watch link |
+| T1DMAUTO | An Android app for a car head unit showing the reading, 6 h of history and the forecast the phone pushes over the watch link |
 
 > [!CAUTION]
 > **Research and educational use only.** The T1DM projects are personal research
@@ -29,7 +30,7 @@ needs one keeps a stub at the path its readers expect, pointing back.
 Duplicated facts drift. Both copies are correct the day they are written and
 disagree later, silently — the software keeps working and one side is wrong.
 
-The obligation runs both ways: a change in one of the four projects that
+The obligation runs both ways: a change in one of the five projects that
 contradicts something written here is also a change to this repository.
 Everything here is present tense and describes the suite as it stands.
 
@@ -49,6 +50,7 @@ PROJECTS/
   T1DMAI.md        and the conventions each project's author has settled on
   T1DMDROID.md
   T1DMKDE.md
+  T1DMAUTO.md
 skills/
   enter-project/            orientation ritual before working on a sister project
   shared-contract-change/   protocol for changing anything shared
@@ -57,14 +59,15 @@ skills/
 
 ## Use
 
-The four projects are sibling checkouts of this one:
+The five projects are sibling checkouts of this one:
 
 ```
 ├── T1DMCOMMON     <- you are here
 ├── T1DMSIM
 ├── T1DMAI
 ├── T1DMDROID
-└── T1DMKDE
+├── T1DMKDE
+└── T1DMAUTO
 ```
 
 Work begins here, so the shared rules are in hand before any code is. `CLAUDE.md`

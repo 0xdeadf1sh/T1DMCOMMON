@@ -344,9 +344,10 @@ the known-good state beats switching off an optimization the author wants on.
 Optional; the app is fully functional without it. `../SPEC/watch.md` is the
 contract. The phone is the central and holds any number of pairings, one link
 each; the ESP32 watch is not built, and `T1DMKDE` is the peripheral in use.
+`T1DMAUTO` is a second peripheral, not yet run on its head unit.
 
 The session crypto and every frame and record codec are the Rust crate
-`crates/t1dm-watch`, which `T1DMKDE` builds from this checkout by path;
+`crates/t1dm-watch`, which `T1DMKDE` and `T1DMAUTO` build from this checkout by path;
 `crates/t1dm-core/src/watch.rs` is only its uniffi face, and `:watch` reaches it
 through the `WatchCodec` port. The GATT UUIDs in `WatchGatt` are the one second
 copy, pinned to the crate's `records_golden.json` by `WatchGattGoldenTest`.

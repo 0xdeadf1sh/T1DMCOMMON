@@ -23,10 +23,10 @@ Read `SPEC/invariants.md` for the concept, then find **every** implementation of
 it. Do not assume there are two — the Kovatchev transform was found in six
 places across three repositories and three languages.
 
-Search all four sibling checkouts:
+Search all five sibling checkouts:
 
 ```
-rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID ../T1DMKDE
+rg -n '<the constant, field name, or formula>' ../T1DMSIM ../T1DMAI ../T1DMDROID ../T1DMKDE ../T1DMAUTO
 ```
 
 List what was found before proceeding. A surprising count is itself the finding;

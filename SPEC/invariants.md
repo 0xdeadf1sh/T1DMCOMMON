@@ -17,7 +17,7 @@ are single-copy — see `../scripts/check-no-copies.sh`.
 
 ## 1. The five-minute grid
 
-*Binds: all four.*
+*Binds: all five.*
 
 Physiologic samples, meal events and dose events sit on a fixed five-minute grid
 in epoch milliseconds:
@@ -69,7 +69,7 @@ lag apart, so a constant offset cancels.
 
 ## 3. Units and sign conventions
 
-*Binds: all four.*
+*Binds: all five.*
 
 Storage units are fixed. Display conversion is presentation-only and never
 written back.
@@ -303,7 +303,7 @@ authoritative and is never re-derived from the parameters beside it.
 
 ## 6. Forecast layout
 
-*Binds: `T1DMAI` → `T1DMDROID` → `T1DMKDE`.*
+*Binds: `T1DMAI` → `T1DMDROID` → `T1DMKDE`, `T1DMAUTO`.*
 
 A prediction carries a median line, a seven-level quantile fan, and a twelve-bin
 circadian distribution with a confidence scalar.

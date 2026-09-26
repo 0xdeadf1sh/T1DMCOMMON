@@ -1,6 +1,6 @@
 # Watch link
 
-*Binds: `T1DMDROID` (central) → `T1DMKDE` and any watch firmware (peripherals).*
+*Binds: `T1DMDROID` (central) → `T1DMKDE`, `T1DMAUTO` and any watch firmware (peripherals).*
 
 A BLE GATT link on which the phone pushes sealed records to paired peripherals.
 Data flows phone → peripheral only. Multi-byte integers are little-endian unless
