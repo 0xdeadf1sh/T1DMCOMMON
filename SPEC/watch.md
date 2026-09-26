@@ -142,8 +142,8 @@ record opened ahead of its turn moves `recv_min` past the ones before it.
 
 | kind | record | sent to | when |
 | --- | --- | --- | --- |
-| `0x01` | glance | every peripheral | each grid tick |
-| `0x02` | history | `EXTENDED` | each tick, last 12 slots; 24 h on connect |
+| `0x01` | glance | every peripheral | each measured reading, each grid tick |
+| `0x02` | history | `EXTENDED` | each measured reading and each tick, last 12 slots; 24 h on connect |
 | `0x03` | forecast | `EXTENDED` | each tick, each new inference cycle, on connect |
 | `0x04` | stats | `EXTENDED` | hourly, on connect |
 | `0x05` | display | `EXTENDED` | on connect, on change |
