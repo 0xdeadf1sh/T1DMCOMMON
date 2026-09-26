@@ -173,8 +173,9 @@ off type  field
 18  N     summary            UTF-8
 ```
 
-`bg_trend` is the direction the phone draws beside its reading: the sensor's reported rate, or,
-with FITTED set, the slope the phone fits when the sensor reports none. A peripheral shows it as
+`bg_trend` is the direction the phone draws beside its reading: the sensor's own arrow for that
+reading's grid slot, else the sensor's reported rate. FITTED marks the slope the phone fits when
+the sensor names no arrow and no rate, or names its arrow undetermined. A peripheral shows it as
 sent and never derives one from `trend_tenths`.
 
 | bit | status |
