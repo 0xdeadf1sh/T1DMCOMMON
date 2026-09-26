@@ -27,7 +27,7 @@ Before doing anything in a project, read, in this order:
 | `../T1DMSIM` | yes | — | `math.md` |
 | `../T1DMAI` | yes | — | `INFERENCE.md` → `SPEC/inference.md` |
 | `../T1DMDROID` | yes | `android-device-testing`, `publish-audit`, `terse-ui-text` | `CGM.md`; `INFERENCE.md` → `SPEC/inference.md`; `WATCH_BLE.md` → `SPEC/watch.md` |
-| `../T1DMKDE` | yes | — | — |
+| `../T1DMKDE` | yes | `kde-apply` | — |
 
 `CGM.md` must **never** be promoted here, in any part: see *What must never enter
 this repository*.
