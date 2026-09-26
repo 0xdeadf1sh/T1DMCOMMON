@@ -358,7 +358,8 @@ separate session and keeps the live keys until the peripheral confirms.
 Pairing runs from the Security panel, or on debug builds from the `WATCH_*`
 broadcasts (`docs/WATCH_BLE.md`). A reconnect tries the cached address first, a direct
 connect that needs no scan; the scan by name, which the screen-lock suspension
-above stops, is the fallback. Pairings made before multi-device support named no
+above stops, is the fallback. A live link reads RSSI and STATUS every 15 s; a
+failed STATUS read tears the link down and reconnects it (`../SPEC/watch.md` §7). Pairings made before multi-device support named no
 device and are dropped on first start: re-pair.
 
 ## Working with the author on this project

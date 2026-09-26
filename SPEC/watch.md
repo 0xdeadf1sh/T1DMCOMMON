@@ -296,6 +296,10 @@ Peripheral → central on CONTROL, `[u8 type][u8 proto][body]`.
   Pairing again replaces the keys; unpairing removes them.
 - **Reconnect.** A dropped link reconnects with exponential backoff while its
   pairing exists.
+- **Liveness.** A central reads STATUS at least every 15 s on a live link, and a
+  failed read drops the link. A peripheral that re-registers its GATT service
+  moves its handles; PUSH written without response to the old ones is lost
+  without an error, and only a failed read shows it.
 
 ## 8. Constants and golden vectors
 
