@@ -168,9 +168,13 @@ off type  field
 10  u8    fc_horizon_steps
 11  u8    fc_trend           0 FLAT, 1 RISING, 2 FALLING, 3 RISING_FAST, 4 FALLING_FAST
 12  u32   reading_age_s      since the last measured reading
-16  u8    summary_len N      N ≤ 40
-17  N     summary            UTF-8
+16  u8    bg_trend           the measured rate's direction, as fc_trend; 0xFF = none
+17  u8    summary_len N      N ≤ 40
+18  N     summary            UTF-8
 ```
+
+`bg_trend` is the direction the phone draws beside its reading. A peripheral shows it as sent
+and never derives one from `trend_tenths`.
 
 | bit | status |
 | --- | --- |
