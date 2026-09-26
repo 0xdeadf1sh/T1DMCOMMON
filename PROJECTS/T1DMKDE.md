@@ -14,7 +14,8 @@ alarm and predicted-low/high bits before the wallpaper sees them.
   identical on T1DMDROID's `main` and `private`, so either checkout builds it.
 - The daemon writes `$XDG_STATE_HOME/t1dmkde/snapshot.json`; the wallpaper reads
   it every 15 s through Plasma5Support's `executable` engine. No compiled QML
-  plugin, so the wallpaper installs per-user with `kpackagetool6`.
+  plugin, so the wallpaper installs per-user with `kpackagetool6`. It draws on
+  the GPU; its shaders ship compiled as `.qsb`, rebuilt by `tools/shaders.sh`.
 - The wallpaper computes nothing clinical. It ages the glance by the phone's
   `stale_min` and withholds the number past it; it draws the fan stale once its
   anchor is older than that and drops it past its last step. The statistics are
@@ -36,6 +37,7 @@ waits for the adapter to be powered and never powers it on.
 ## Checks
 
 - `cargo test` — link state machine, model, store.
-- `tools/render.sh` on `t1dmkd sample` output — offscreen renders at seven
-  resolutions, fresh and aged. One layout: the graph edge to edge, the reading
-  and statistics on a panel over its top-right corner.
+- `tools/render.sh` on `t1dmkd sample` output — offscreen GPU renders at seven
+  resolutions, fresh and aged, through PySide6 and an X display. One layout: the
+  graph edge to edge, the reading and statistics on a panel over its top-right
+  corner.
