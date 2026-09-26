@@ -4,7 +4,8 @@ A KDE Plasma 6 wallpaper, a panel widget, and the BLE daemon that feeds both. Th
 daemon, `t1dmkd`, is a peripheral on the watch link (`../SPEC/watch.md`) that sets
 `EXTENDED`, so the phone pushes it history, the forecast fan, statistics and the
 resolved theme as well as the glance. The panel widget shows the glance alone: the
-reading, its arrow and its age. Rust daemon, QML packages. MIT.
+reading, its arrow and its age; `t1dmkd prompt` prints the same for a shell
+prompt. Rust daemon, QML packages. MIT.
 
 Active: it displays a patient's live record. It never alarms; the daemon drops the
 alarm and predicted-low/high bits before either package sees them.
@@ -18,10 +19,14 @@ alarm and predicted-low/high bits before either package sees them.
   plugin; `tools/install.sh` installs both per-user with `kpackagetool6`, copying
   in the QML they share from `shared/`. The wallpaper draws on the GPU; its
   shaders ship compiled as `.qsb`, rebuilt by `tools/shaders.sh`.
-- Neither package computes anything clinical. One stale rule in `shared/` ages
-  the glance by the phone's `stale_min` and withholds the number past it; the
-  wallpaper draws the fan stale once its anchor is older than that and drops it
-  past its last step. The statistics are drawn as sent.
+- Nothing here computes anything clinical. The daemon writes the glance's
+  `fresh_until_ms`: `stale_min` past the reading, null when the phone flags it
+  stale or signal lost. The packages and the prompt withhold the number past it.
+  The wallpaper draws the fan stale once its anchor is older than `stale_min`
+  and drops it past its last step. The statistics are drawn as sent.
+- Restarting `t1dmkd` while the phone is connected moves the watch service to
+  new GATT handles. The phone's next STATUS read fails and it reconnects
+  (`../SPEC/watch.md` §7): data resumes within about 40 s.
 
 ## Pairing
 
