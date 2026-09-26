@@ -517,6 +517,11 @@ them**; unifying them would be the defect.
    model-space constants beside them are both correct and serve different
    purposes. Never unify them.
 
+2. **The phone withholds a predicted alarm the scored one raises.** At the first
+   step where either §6.1 edge crosses, `T1DMDROID` raises nothing if both do —
+   the hypo edge below low and the hyper edge at or above high — and reads the
+   forecast `UNSURE`. `T1DMAI`'s scored alarm has no such case.
+
 ## Open questions
 
 Each is a place where two implementations could diverge without either looking
@@ -527,12 +532,3 @@ wrong.
 
 2. **Circadian phase origin.** §6 requires the midnight bin to be named. Confirm
    against the exporter in `T1DMAI`.
-
-3. **The phone's predictive alarm and the scored alarm read different bases.**
-   §6.1 fixes the scored hypo/hyper alarm on the τ=`0.25`/`0.75` band edges, and
-   `T1DMAI` computes recall and precision that way. `T1DMDROID`'s shipped
-   predictive alert reads the **median** line instead
-   (`BgGlanceComputer.findCrossings`), and its dose-calculator fan reads the
-   τ=`0.05`/`0.95` extremes (`calc/…/RollingForecaster.kt`). A recall figure
-   measured on the band edge does not describe the alarm the patient receives.
-   Record which basis the phone's alarm reads, and score it on that one.
