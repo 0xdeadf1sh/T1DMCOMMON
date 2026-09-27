@@ -308,8 +308,13 @@ launch or the dialog stalls the launch.
   inputs, Gradle repackages an old library while the bindings reference new
   functions. The signature is an `UnsatisfiedLinkError` naming
   `uniffi_..._checksum_func_*`.
-- **`cargo-ndk` must be on `PATH`** or the native build silently *skips*.
+- **`cargo` and `cargo-ndk` must be on `PATH`** or the build fails.
   `cargo install`ed tools live in `~/.cargo/bin`, not on the default path here.
+- **No NDK found skips the native build silently**, and the APK packages whatever
+  `.so` an earlier build left in `build/generated/jniLibs`. The NDK is looked up
+  under `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, then the first SDK path set
+  (`ANDROID_HOME`, `ANDROID_SDK_ROOT`, `local.properties`), so an SDK without
+  `ndk/` skips even when a later path has one.
 - **Wrapping arithmetic in checksums.** A checksum that summed in wider precision
   than the specification passed every published golden vector — none of which
   overflowed — while failing on real data, where the fail-closed gate then dropped
