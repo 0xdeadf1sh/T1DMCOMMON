@@ -148,6 +148,7 @@ record opened ahead of its turn moves `recv_min` past the ones before it.
 | `0x04` | stats | `EXTENDED` | hourly, on connect |
 | `0x05` | display | `EXTENDED` | on connect, on change |
 | `0x06` | unpair, no body | every peripheral | when its user unpairs (§7) |
+| `0x07` | outlook | every peripheral | with each glance, just before it |
 
 The central sends kinds `0x02`–`0x05` only when STATUS sets `EXTENDED` and the
 negotiated ATT MTU is at least 247. The low-power suspension (§5.3) holds every
@@ -272,6 +273,26 @@ off type    field
 ```
 
 The palette is the phone's resolved theme, custom themes included.
+
+### 5.8 Outlook, `0x07`
+
+```
+off type  field
+ 0  u8    kind = 0x07
+ 1  u8    state              0 VOID, 1 STABLE, 2 UNSURE, 3 HYPO, 4 HYPER
+ 2  u16   eta_s              HYPO, HYPER: seconds from this push to the first step out; else 0
+```
+
+The phone's glycemic status, as its top bar shows it. The forecast is scanned step by step
+for the first step whose hypo-alarm edge (`invariants.md` §6.1) is below the low threshold
+or whose hyper-alarm edge is at or above the high threshold. STABLE: no step is out.
+HYPO, HYPER: the first step out, one edge. UNSURE: both edges, at that step. VOID:
+warm-up, no reading or forecast, a reading or forecast anchor older than `stale_min`, a
+forecast flagged stale or other than OK, or no thresholds or alarm edges.
+
+It belongs to the glance that follows it. A peripheral counts `eta_s` down on its own clock
+from receipt, shows VOID while the glance is stale, and derives no state from the forecast.
+A state above 4 reads as VOID.
 
 ## 6. Control frames
 
