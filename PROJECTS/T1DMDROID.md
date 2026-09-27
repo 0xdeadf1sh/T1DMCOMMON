@@ -124,8 +124,9 @@ reaches the change; a blanket drop would narrow the displayed band over a
 week-old correction, the wrong direction to fail in.
 
 Dose advice is scored on the fp32 XNNPACK CPU path or not at all. A model served
-by the `StubBackend` — no artifact, or one that would not load — still renders a
-forecast, and the dose calculator refuses on it.
+by the `StubBackend` — no artifact, or one that would not load — publishes no
+forecast: nothing is drawn, stored, pushed or alarmed on, and the Models note
+names the missing `.pte`.
 
 **Cold start**: the model needs a minimum context of patches before it may
 predict, and a configurable warm-up window on top suppresses forecasts until
@@ -145,8 +146,9 @@ exchangeability argument does not cover — accepted, because nothing the sweep
 draws is read by anything. Every classifier — alarm
 engine, calculator rails, accuracy suite — reads the raw fan, the `prediction`
 table stores the raw fan, and the median never moves. A stored correction lapses one fitting
-window after it was made, and replacing the artifact under the same id drops the
-correction and the forecasts it was fitted on together.
+window after it was made. Each model refresh fingerprints an id's files; a
+changed fingerprint drops that id's correction and stored forecasts and detaches
+its adapters.
 
 **Every model the app runs is an exported graph.** There is no on-device
 forecaster without a descriptor and an artifact, so a device with no `.pte`
