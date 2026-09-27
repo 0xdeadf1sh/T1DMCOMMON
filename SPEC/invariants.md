@@ -509,10 +509,6 @@ repository. An entry is **deleted** once the implementation agrees.
    reach the JNI seam. The client's golden vectors pin the current bound and need
    regenerating alongside the change.
 
-2. **`T1DMDROID` counts gap-fills in its statistics.** §1 keeps a gap-fill out of
-   every statistic; `toStatSample` in `data/.../stats/StatsRepository.kt` drops
-   only reconstructed values, so interpolated ones enter as measurements.
-
 ## Accepted divergences
 
 Differences a reviewer will read as drift. They are deliberate. **Do not "fix"
