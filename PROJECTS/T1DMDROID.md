@@ -140,9 +140,10 @@ carries a `conformal_delta`, so the fan the phone draws is the raw fan until the
 user asks for a fit from the Models drill-down. That fit is
 `../SPEC/inference.md` §8.4's, run in the Rust core over the patient's own
 matured `(forecast, realized)` windows at the model's own horizon, stored per
-model id, and reaching two **display** fans and nothing else: the BG panel's
-forecast overlay and the hindsight sweep beside it. Both, or a raw fan would
-state a second and narrower uncertainty beside a calibrated one. The sweep
+model id, and reaching three fans that are drawn and nothing that classifies:
+the BG panel's forecast overlay, the hindsight sweep beside it, and the forecast
+record pushed to watch peripherals (`../SPEC/watch.md` §5.5). All three, or a raw
+fan would state a second and narrower uncertainty beside a calibrated one. The sweep
 applies it in-sample to the rows the delta was fitted on, which §8.4's
 exchangeability argument does not cover — accepted, because nothing the sweep
 draws is read by anything. Every classifier — alarm

@@ -705,16 +705,17 @@ distribution; for real-world CGM it must be re-fit per cohort or omitted, and th
 export path ships none. Off device, `T1DMAI/conformal.py` fits and applies one
 delta and `T1DMAI/mondrian.py` bins it into a stack. On device, `T1DMDROID` fits a
 **marginal** per-patient delta from the patient's own matured forecasts — one
-`(step, τ)` correction, no region axis — and applies it to **display only**: the raw
-fan is what the alarm engine, the dose calculator, the accuracy suite and the
-`prediction` table all carry. Both implementations are bound by the
+`(step, τ)` correction, no region axis — and applies it only to fans that are
+drawn: its own, and the forecast record it pushes to peripherals (`watch.md` §5.5,
+flagged `CALIBRATED`). The raw fan is what the alarm engine, the dose calculator,
+the accuracy suite and the `prediction` table all carry. Both implementations are bound by the
 order-statistic rule above, and because both publish τ.05–.95 coverage under one
 name, neither may change it alone.
 
 The delta *corrects* a fan the model already emitted. It is fitted after the
 model, stored apart from it, and skippable, so a raw and a calibrated fan both
-exist and only the raw one may be classified on, stored, or sent. It may never
-move a median.
+exist and only the raw one may be classified on or stored. It may never move a
+median.
 
 ---
 
