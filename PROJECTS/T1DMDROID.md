@@ -188,8 +188,11 @@ their thresholds are user-set and deliberately **unbounded** — the author
 explicitly overrode a proposed compiled ceiling. Advisory-only plus manual
 administration is the safety net. Respect that decision.
 
-Interpolated or warm-up readings never clear an alarm; only a measured in-range
-value does.
+Interpolated or warm-up readings never clear an alarm. A threshold alarm clears or
+steps down only on a measured value past the crossed threshold by
+`AlarmConfig.clearMarginMgdl`, and no older than the newest measured reading. A
+restarted service seeds the engine from the last stored measured reading, so loss
+of signal still fires when the sensor never returns.
 
 No CI runs these on push; the gates are local. `:calc:testDebugUnitTest` pins the
 calculator invariants, and `cargo test -p t1dm-core` holds the core to bit-for-bit
