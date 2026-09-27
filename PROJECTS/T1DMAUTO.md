@@ -1,13 +1,14 @@
 # T1DMAUTO — working knowledge
 
 An Android app for a car head unit (Android 10, 2 GB RAM): the reading, its arrow,
-6 h of history, the 2 h forecast and the phone's forecast message, in a light or
-dark theme. A Rust core behind JNI is a peripheral on the watch link
+6 h of history, the 2 h forecast, the phone's status and its forecast message, in a
+light or dark theme. A Rust core behind JNI is a peripheral on the watch link
 (`../SPEC/watch.md`) that sets `EXTENDED`; Kotlin runs the GATT server, the
 advertiser and one `Canvas` view. No AndroidX. MIT.
 
 Active: it displays a patient's live record. It never alarms; the core drops the
-alarm and predicted-low/high bits before the screen sees them.
+alarm and predicted-low/high bits before the screen sees them. The outlook is
+shown as text, as sent.
 
 ## Seams
 
@@ -36,4 +37,6 @@ not run against a phone; `cargo test` covers the link, pairing and model.
 - `cargo test` — link state machine, pairing flow, model, store.
 - `tools/render.sh <serial>` — the synthetic day on a device in sample mode, at
   1024x600, 1280x720 and 2000x1200, both themes, fresh and aged, and the pairing
-  states; uninstalls afterwards.
+  states; uninstalls afterwards. It sets the device's `wm size` and `wm density`;
+  a HyperOS launcher re-lays out its home screen for each and keeps that layout
+  after the reset. Never run it on the user's phone.
