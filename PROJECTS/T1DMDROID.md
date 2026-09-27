@@ -226,13 +226,16 @@ while looking plausible. Relabelling does not rescue basal either: the host's IO
 sums every treatment carrying an `insulin` field and never reads `eventType`, so
 a day's long-acting lands there as one rapid bolus.
 
-Nothing bridged carries a grid timestamp. A BG entry carries the reading's
+Nothing bridged carries a bare grid timestamp. A BG entry carries the reading's
 unsnapped `measuredAtMs` — receipt on the passive path, the sensor's own sample
-clock on the connected one — and a treatment carries the event's unsnapped
-`updatedAt`. The host keys by timestamp and discards a collision with a `200`,
-and the grid manufactures collisions: it puts a meal and the bolus taken with it
-on one instant, and two readings contesting one slot on one `date`. Do not
-"restore" the grid here; the grid still governs the phone's own record.
+clock on the connected one. A treatment carries its grid slot plus the sub-slot
+milliseconds of the instant it was logged (`loggedAtMs`, or `updatedAt` on a row
+without one), so an edit that moves the event moves it on the host. The host keys
+by timestamp and discards a collision with a `200`, and the grid manufactures
+collisions: it puts a meal and the bolus taken with it on one instant, and two
+readings contesting one slot on one `date`. Do not "restore" the grid here; the
+grid still governs the phone's own record. Only measured readings are bridged:
+gap-fills, reconstructions and warm-up values stay on the phone.
 
 The `/api/v1` write has no idempotency key, so a lost acknowledgement can
 duplicate an upload. The phone narrows that window by reading back before a
