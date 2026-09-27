@@ -26,10 +26,16 @@ in epoch milliseconds:
 ts % 300000 == 0
 ```
 
-`T1DMDROID` **snaps** a timestamp to the grid before storing it. The snapping rule
-is part of the contract: two implementations that floor where the other rounds
-both land on the grid and both pass every validation, while filing the same
-reading in different buckets.
+`T1DMDROID` **snaps** a timestamp to the nearest grid slot before storing it; a
+tie goes to the later slot:
+
+```
+slot = floor((ts + 150000) / 300000) · 300000
+```
+
+The snapping rule is part of the contract: two implementations that floor where
+the other rounds both land on the grid and both pass every validation, while
+filing the same reading in different buckets.
 
 Gaps are explicit. A grid slot with no measurement stores `NULL`, or a gap-fill
 flagged interpolated: `T1DMDROID` stores a straight line between two measured
@@ -528,8 +534,5 @@ them**; unifying them would be the defect.
 Each is a place where two implementations could diverge without either looking
 wrong.
 
-1. **Snapping rule.** §1 requires the phone's snap to be specified as nearest,
-   floor, or ceiling. Confirm what `T1DMDROID` does and record it.
-
-2. **Circadian phase origin.** §6 requires the midnight bin to be named. Confirm
+1. **Circadian phase origin.** §6 requires the midnight bin to be named. Confirm
    against the exporter in `T1DMAI`.
