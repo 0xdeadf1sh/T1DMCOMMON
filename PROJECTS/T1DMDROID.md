@@ -74,11 +74,7 @@ in the shape the exporter writes rather than projecting it onto a second schema.
 **The model input carries no exercise.** `crates/t1dm-core/src/preproc.rs` pins
 the four features of `../SPEC/inference.md` §6–7 and refuses a descriptor
 declaring any other count. The app keeps its exercise record and its panels, and
-none of it reaches a forecast. Two comments are stale: `ExerciseDisposal.kt`
-calls its default rate `T1DMSIM`'s population constant, and
-`ExerciseDisposalTest.kt` calls an intensity-scaled magnitude off-distribution
-for models pretrained on `T1DMSIM` — `T1DMSIM` has no such constant and no such
-distribution.
+none of it reaches a forecast.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
 selection matrix naming the patch each head slot reads, so forecast, backcast and
