@@ -35,8 +35,8 @@ not run against a phone; `cargo test` covers the link, pairing and model.
 ## Checks
 
 - `cargo test` — link state machine, pairing flow, model, store.
-- `tools/render.sh <serial>` — the synthetic day on a device in sample mode, at
-  1024x600, 1280x720 and 2000x1200, both themes, fresh and aged, and the pairing
-  states; uninstalls afterwards. It sets the device's `wm size` and `wm density`;
-  a HyperOS launcher re-lays out its home screen for each and keeps that layout
-  after the reset. Never run it on the user's phone.
+- `tools/render.sh <serial>` — the synthetic day drawn offscreen by the app on a
+  device in sample mode, at 1024x600, 1280x720 and 2000x1200, both themes, fresh
+  and aged, and the pairing states; uninstalls afterwards. It leaves the device's
+  display alone: a `wm size` or `wm density` change makes a HyperOS launcher
+  re-lay out its home screen, and the layout stays after a reset.
