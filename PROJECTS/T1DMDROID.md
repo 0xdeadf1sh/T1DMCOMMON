@@ -156,9 +156,11 @@ publishes no forecast, and neither does the warm-up window.
 
 **A backtest scores a model on days it did not forecast.** The Models drill-down
 replays the last 1–14 days through one model as it runs now — offset, adapter,
-smoothing — one forecast per measured slot, each built from what the phone held
-when that reading arrived: readings by receipt, meals and doses by `loggedAtMs`,
-fills and promoted reconstructions by the fill's creation. The replayed
+smoothing — one forecast per measured slot, each built from what the phone had
+logged by then: readings by `rxWallMs` (receipt on the passive path, the sample
+instant on a connected one), meals and doses by `loggedAtMs`, fills and promoted
+reconstructions by the fill's creation. An edit or deletion made after the
+replayed instant shows in the replay. The replayed
 forecasts are paired with realized BG by the stored forecasts' rule and scored by
 the same suite. Nothing is written to `prediction`; nothing reaches the band fit,
 the hindsight sweep, an alarm or a dose. An attached adapter scores in-sample on
