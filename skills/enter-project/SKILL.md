@@ -50,10 +50,10 @@ Current at the time of writing — verify against the project:
   create a repository there without running it.
 - **`T1DMDROID` / `terse-ui-text`** — read before writing any user-facing string.
 - **`T1DMDROID` / `android-device-testing`** — the build/deploy/screenshot loop.
-- **`T1DMDROID` CI** — `build.yml`, `rail-invariants.yml` (blocking safety gate
-  on the dose calculator), `rust-golden.yml` (bit-for-bit core vectors). Its
-  `CLAUDE.md` adds a standing rule: build **both** branches, and install the
-  release build on the phone when one is attached.
+- **`T1DMDROID` gates, local only** — `:calc:testDebugUnitTest` (rail invariants
+  on the dose calculator) and `cargo test -p t1dm-core` (bit-for-bit core
+  vectors); no CI fires. Its `CLAUDE.md` adds a standing rule: build **both**
+  branches, and install the release build on the phone when one is attached.
 - **`T1DMKDE`** — builds against `../T1DMDROID/crates/t1dm-watch`; after any QML
   change, the offscreen render check in its `CLAUDE.md`. Never commit a snapshot
   or a render made from real data.

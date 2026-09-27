@@ -189,8 +189,9 @@ administration is the safety net. Respect that decision.
 Interpolated or warm-up readings never clear an alarm; only a measured in-range
 value does.
 
-CI enforces this: `rail-invariants.yml` is a blocking gate on the calculator
-invariants, and `rust-golden.yml` holds the core to bit-for-bit vectors.
+No CI runs these on push; the gates are local. `:calc:testDebugUnitTest` pins the
+calculator invariants, and `cargo test -p t1dm-core` holds the core to bit-for-bit
+vectors.
 
 ## Outbound destinations
 
