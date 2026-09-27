@@ -306,9 +306,10 @@ launch or the dialog stalls the launch.
   binary crate passes the test gate and fails `cargo build --release`. Always
   build the release profile in any Rust gate. Related: `cmd | tail` returns
   *tail's* status and masks a cargo failure — capture `PIPESTATUS[0]`.
-- **Room rejects leftover columns.** Dropping a column requires recreating the
-  table, not a leave-the-column migration; Room compares the live table to the
-  entity exactly on open and crashes on launch otherwise. Verify a migration both
+- **Room rejects leftover columns.** Room compares the live table to the entity
+  exactly on open and crashes on launch on any difference, so a column removed
+  from an entity must also leave the table: `ALTER TABLE … DROP COLUMN` on the
+  bundled SQLite driver, not a leave-the-column migration. Verify a migration both
   by instrumented test *and* by a real reinstall over old data — they catch
   different failures.
 - **Stale cross-compiled `.so`.** If the Rust sources are not declared as task
