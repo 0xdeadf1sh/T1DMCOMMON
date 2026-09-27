@@ -31,13 +31,14 @@ is part of the contract: two implementations that floor where the other rounds
 both land on the grid and both pass every validation, while filing the same
 reading in different buckets.
 
-Gaps are explicit. A grid slot with no measurement stores `NULL`; it is never
-back-filled at rest. Gap-filling is a presentation step, and a filled value must
-never be written back as though measured.
+Gaps are explicit. A grid slot with no measurement stores `NULL`, or a gap-fill
+flagged interpolated: `T1DMDROID` stores a straight line between two measured
+readings. The flag stays on the row. A gap-fill never displaces a measurement,
+never clears an alarm, and never enters a statistic as a measurement.
 
-A slot is in one of three states: measured, empty, or tombstoned. A tombstone is
-a deletion the patient authored; it hides the row, is not a gap the sensor left,
-and must never be re-filled by a restore of the value it retired.
+A slot is in one of four states: measured, interpolated, empty, or tombstoned. A
+tombstone is a deletion the patient authored; it hides the row, is not a gap the
+sensor left, and must never be re-filled by a restore of the value it retired.
 
 One narrow exception. A model-reconstructed value may be promoted to a stored
 sample by a deliberate user action, and only while it stays permanently flagged as
@@ -45,7 +46,7 @@ reconstructed. The flag is for
 life: such a value may never clear an alarm, never anchor or condition a dose
 recommendation, never be a fit target or a fit window's context, never count as
 measured context for a cold start or a warm-up, and never enter a statistic as a
-measurement. A carry-forward or interpolated value gets no such route.
+measurement. A carry-forward value gets no such route.
 
 ## 2. `tz_offset`
 
@@ -507,6 +508,10 @@ repository. An entry is **deleted** once the implementation agrees.
    is 500, and `KovatchevScale.kt` mirrors it for the display chrome that cannot
    reach the JNI seam. The client's golden vectors pin the current bound and need
    regenerating alongside the change.
+
+2. **`T1DMDROID` counts gap-fills in its statistics.** §1 keeps a gap-fill out of
+   every statistic; `toStatSample` in `data/.../stats/StatsRepository.kt` drops
+   only reconstructed values, so interpolated ones enter as measurements.
 
 ## Accepted divergences
 
