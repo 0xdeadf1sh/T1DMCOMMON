@@ -105,8 +105,21 @@ inside the `.pte`; a fit is a few thousand numbers trained from the patient's ow
 matured windows. A head that does not reproduce the graph's own output is
 refused.
 
-**An adapter is refused at attach unless it has been measured against the model's
-own dose response.** A few thousand parameters fitted to one patient's weeks can
+**An adapter has one kind — forecast, infill or backcast — and runs only on that
+shape.** One adapter per kind may be attached to a model. The forecast adapter
+serves the live cycle, the dose path and the backtest; an infill or backcast
+adapter serves the BG panel's fills of its shape. A fit trains on windows of its
+own kind alone, drawn from up to a year of every sensor's measured readings; where
+two sensors overlap in time, the trusted one keeps the window. A window is
+admitted only if no meal or bolus starts inside its predicted span. Candidates sit
+on an hourly grid and, for each meal or bolus, immediately beside it: the span
+opens on the step after it, or, for a backcast, closes on the step before it.
+Onsets 15 minutes apart or less count as one event; basal is not an event.
+
+**A forecast adapter is refused at attach unless it has been measured against the
+model's own dose response.** An infill or backcast adapter is exempt: the probe
+measures a forecast horizon, such an adapter fits on pinball loss alone, and a
+fill never reaches the dose calculator. A few thousand parameters fitted to one patient's weeks can
 null the model's marginal response to insulin with a rank-1 map, score better on
 the loss it was fitted on, and leave the dose calculator reading a forecaster
 that does not move when insulin is added — which is what the predicted-low veto
