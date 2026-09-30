@@ -56,9 +56,9 @@ UVA/Padova value. An unbolused meal stays high for hours. Seeds 1000–1011 over
 clamped to [`BG_CLAMP_MIN`, `BG_CLAMP_MAX`] = [1, 400] mg/dL.
 
 An undosed tail can fall to that floor: behaviour is off, so no rescue fires, and
-the glucose-effectiveness pull at `GE_RATE` 0.015 does not stop it.
-`test_no_tail_is_ever_rejected` fails on it, 105 → 1.5 mg/dL inside 2 h. The two
-`TestSevereHypoRefractory` tests fail as well; they assume the phone-record refit.
+the glucose-effectiveness pull at `GE_RATE` 0.015 does not stop it; one fell
+105 → 1.5 mg/dL inside 2 h. No test pins the undosed tail's floor or the hypo
+rescue refractories.
 
 ## The exported record is the patient's log
 
