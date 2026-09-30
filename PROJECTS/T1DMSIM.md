@@ -37,23 +37,28 @@ Speed figures are machine-dependent, and a ratio can improve because the
 
 ## The dosing policy
 
-Scheduled bolus count, clock time and dose are drawn independent of meals, carbs
-and BG, so the insulin channel carries its own effect rather than a meal's shadow.
-It is a deliberate departure from every real patient; never justify it as realism.
-Most boluses with no meal carbs nearby fall in a meal-free night window.
-BG-reactive dosing is the pre-bolus skip below the patient's hypo threshold and a
-correction bolus, taken with probability `HYPER_CORRECTION_PROBABILITY` on an
-awake CGM check above `HYPER_CORRECTION_THRESHOLD`.
+Boluses follow meals: each is dosed from the logged carb count over the patient's
+ICR, skipped below the patient's hypo threshold and cut within
+`BOLUS_REDUCE_MARGIN` above it. Corrections fire above a skill-lowered
+`BG_HIGH_THRESHOLD` once the patience window has run.
+
+`main-old`, and `origin/main` until it is force-pushed, carry another policy: bolus
+count, time and dose drawn independent of meals, and a correction bolus gated on
+`HYPER_CORRECTION_PROBABILITY`. A claim about dosing names its branch.
 
 Insulin is not the only thing that brings BG down: the insulin-independent
 glucose-effectiveness pull toward the equilibrium runs at every step and
 dominates below `RENAL_THRESHOLD`. Above that threshold `RENAL_CLEARANCE_RATE`
 excretes glucose on top, at a damping tune carrying a `[DAMP]` tag, not the
-UVA/Padova value. An unbolused meal stays high for hours. The population is tuned
-tight all the same: seeds 1000–1011 over 168 h each, after a 48 h warm-up, put
-`bg_observed` near a 125 mg/dL mean with an SD near 40, about 5% below 70 mg/dL,
-about 86% in 70–180, and no time at the 400 ceiling.
-True BG has no floor and can go below zero; only the CGM reading is clipped.
+UVA/Padova value. An unbolused meal stays high for hours. Seeds 1000–1011 over
+168 h each, after a 48 h warm-up, put `bg_observed` at a 142.5 mg/dL mean, SD 57.1,
+6.8% below 70 mg/dL, 71.9% in 70–180 and 0.07% at the 400 ceiling. True BG is
+clamped to [`BG_CLAMP_MIN`, `BG_CLAMP_MAX`] = [1, 400] mg/dL.
+
+An undosed tail can fall to that floor: behaviour is off, so no rescue fires, and
+the glucose-effectiveness pull at `GE_RATE` 0.015 does not stop it.
+`test_no_tail_is_ever_rejected` fails on it, 105 → 1.5 mg/dL inside 2 h. The two
+`TestSevereHypoRefractory` tests fail as well; they assume the phone-record refit.
 
 ## The exported record is the patient's log
 
@@ -64,26 +69,25 @@ carry the intended dose, before the injection-site factor. A meal logs the carb
 count its bolus is dosed from. Blood glucose runs on the `*_true` keys, which the
 cache does not store. `../SPEC/cache.md` §4 is the rule.
 
-`main` predates both splits and exports true carbohydrate and true insulin under
-those names. `old-sim` has the carbohydrate split — `_logged_carb` and
-`total_carb_true` are both there — and not the insulin one, so its
-`total_insulin` is the delivered dose. Nothing about a row's shape says which
-branch built it.
+`main` has both splits. `main-old` predates both and exports true carbohydrate and
+true insulin under those names. `old-sim` has the carbohydrate split and not the
+insulin one, so its `total_insulin` is the delivered dose. Nothing about a row's
+shape says which branch built it.
 
 ## Stale artefacts on disk
 
-`diff/README.md`, `diff/stats.json` and the `uva_padova/` reports predate the
-randomised dosing policy and describe a different simulator. Regenerating them
+`diff/README.md`, `diff/stats.json` and the `uva_padova/` reports describe a
+different simulator. Regenerating them
 needs the three real datasets and simglucose, neither of which is on this machine.
 The comparison mechanism stays and still reads `diff/stats.json`.
-Its `datasets.Sim` mean of 162.9 mg/dL is the pre-retune simulator, so
-`DATASET.md` reports a gap near −38 mg/dL against a fresh pool's ~125 mg/dL.
+Its `datasets.Sim` mean of 162.9 mg/dL is an older simulator's, so the gap
+`DATASET.md` reports is measured against that.
 `tests/test_hypo_oversample.py` pins no number against that baseline: it asserts
 the section renders when a baseline is present, is omitted when it is not, and
 that an oversampled pool shifts against an unbiased one built in the same run.
 
-The population is tuned against one real CGM record rather than the public
-cohorts, so a figure quoted from those reports describes neither.
+`main` does not carry the refit onto the one real CGM record; it lives on `omar`
+alone (`2f6c966`). A figure quoted from those reports describes neither branch.
 
 Analysis code deserves the same scrutiny as the thing it analyses: an audit of
 the comparison tooling once fixed fifteen defects in it.
