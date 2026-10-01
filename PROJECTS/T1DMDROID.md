@@ -9,7 +9,7 @@ JNI. MIT. Sideload-only, never a store listing. Targets exactly one phone.
 
 > Some of this project's knowledge is **deliberately not here**: device protocol
 > work, the branch seam, and safety-override design stay in the project's own
-> memory and its local-only branch, because this repository is public. See
+> memory and its local-only branches, because this repository is public. See
 > `../skills/common-boundary`. Absence from this file is not absence of rules —
 > read the project's own skills.
 
@@ -170,8 +170,8 @@ publishes no forecast, and neither does the warm-up window.
 **A backtest scores a model on days it did not forecast.** The Models drill-down
 replays the last 1–14 days through one model as it runs now — offset, adapter,
 smoothing — one forecast per measured slot, each built from what the phone had
-logged by then: readings by `rxWallMs` (receipt on the passive path, the sample
-instant on a connected one), meals and doses by `loggedAtMs`, fills and promoted
+logged by then: readings by `rxWallMs` (the sensor's own sample instant over the
+connected session), meals and doses by `loggedAtMs`, fills and promoted
 reconstructions by the fill's creation. An edit or deletion made after the
 replayed instant shows in the replay. The replayed
 forecasts are paired with realized BG by the stored forecasts' rule and scored by
@@ -240,8 +240,8 @@ sums every treatment carrying an `insulin` field and never reads `eventType`, so
 a day's long-acting lands there as one rapid bolus.
 
 Nothing bridged carries a bare grid timestamp. A BG entry carries the reading's
-unsnapped `measuredAtMs` — receipt on the passive path, the sensor's own sample
-clock on the connected one. A treatment carries its grid slot plus the sub-slot
+unsnapped `measuredAtMs` — the sensor's own sample clock over the connected
+session. A treatment carries its grid slot plus the sub-slot
 milliseconds of the instant it was logged (`loggedAtMs`, or `updatedAt` on a row
 without one), so an edit that moves the event moves it on the host. The host keys
 by timestamp and discards a collision with a `200`, and the grid manufactures

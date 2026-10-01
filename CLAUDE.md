@@ -181,9 +181,9 @@ number — over showing a value you cannot justify.
 
 ## What must never enter this repository
 
-`T1DMCOMMON` is public. Some of its consumers are not: `T1DMDROID` maintains a
-local-only branch carrying reverse-engineered CGM sensor-control protocol, and
-that repository has twice had to be deleted after such content reached GitHub.
+`T1DMCOMMON` is public. Some of its consumers are not: both of `T1DMDROID`'s
+branches are local-only and carry reverse-engineered CGM sensor-control protocol,
+and that repository has twice had to be deleted after such content reached GitHub.
 
 Read `skills/common-boundary` before adding a file. Never move here:
 
@@ -203,17 +203,20 @@ a separate, explicit task — report what it needs instead of reaching into it.
 
 ### T1DMDROID has two branches, and most work belongs on both
 
-`T1DMDROID` keeps a public `main` and a local-only `private`. One thing separates
-them: `private` carries the reverse-engineered CGM sensor-control work — the
-connected-session sources, the session crypto, the unredacted protocol document —
-and `main` is the passive-advertisement reader without it.
+`T1DMDROID` keeps `main` and `private`. Both carry the reverse-engineered
+connected-session work — the connected sources, the session crypto, the protocol
+document. One thing separates them: `private` reads a sensor past its rated life;
+`main` shows the sensor expired, stores and alarms on nothing past expiry, and
+carries no in-app reset. Both are local-only and unpublished: `.git/hooks/pre-push`
+refuses every ref, and `scripts/publish-audit.sh` rejects either branch, since both
+carry the connected-session protocol.
 
-**Unless a change touches that reverse-engineering seam, it lands on both
-branches.** A forecast fix, a UI change, a calculator rail, a schema migration, a
-dependency bump, a specification-driven correction: all of it. The branches are
-synced by hand, so nothing will notice for you.
+**Unless a change touches that expiry seam, it lands on both branches.** A
+forecast fix, a UI change, a calculator rail, a schema migration, a dependency
+bump, a specification-driven correction: all of it. The branches are synced by
+hand, so nothing will notice for you.
 
 Apply the change to each branch **deliberately** — as its own commit on each —
 rather than merging or cherry-picking across the seam; a careless merge is how
-private content reached `main`, twice. When you cannot land both halves in one
-task, say which branch has the change and which does not.
+private content reached a then-pushable `main`, twice. When you cannot land both
+halves in one task, say which branch has the change and which does not.

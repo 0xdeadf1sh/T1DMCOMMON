@@ -2,9 +2,9 @@
 name: common-boundary
 description: >-
   MANDATORY before adding, moving, or promoting any file into T1DMCOMMON. This repository is public
-  and is consumed by repositories that are not — T1DMDROID keeps a local-only branch carrying
-  reverse-engineered CGM sensor-control protocol and real patient data, and it has twice had to be
-  deleted after such content reached GitHub. Triggers: "move this into common", "promote", "share
+  and is consumed by repositories that are not — both of T1DMDROID's branches are local-only and
+  carry reverse-engineered CGM sensor-control protocol and real patient data, and it has twice had to
+  be deleted after such content reached GitHub. Triggers: "move this into common", "promote", "share
   this constant", "put it in the spec", adding any file under T1DMCOMMON, or copying anything out of
   a sister repository into it.
 ---
