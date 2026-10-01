@@ -9,7 +9,7 @@ JNI. MIT. Sideload-only, never a store listing. Targets exactly one phone.
 
 > Some of this project's knowledge is **deliberately not here**: device protocol
 > work, the branch seam, and safety-override design stay in the project's own
-> memory and its local-only branches, because this repository is public. See
+> memory and its own repository, because this repository is public. See
 > `../skills/common-boundary`. Absence from this file is not absence of rules —
 > read the project's own skills.
 

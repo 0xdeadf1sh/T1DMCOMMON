@@ -181,9 +181,10 @@ number — over showing a value you cannot justify.
 
 ## What must never enter this repository
 
-`T1DMCOMMON` is public. Some of its consumers are not: both of `T1DMDROID`'s
-branches are local-only and carry reverse-engineered CGM sensor-control protocol,
-and that repository has twice had to be deleted after such content reached GitHub.
+`T1DMCOMMON` is public. Some of its consumers are not: `T1DMDROID`'s `private`
+branch is local-only, and its `docs/CGM.md` documents reverse-engineered CGM
+sensor-control protocol. That repository has twice had to be deleted after private
+content reached GitHub.
 
 Read `skills/common-boundary` before adding a file. Never move here:
 
@@ -204,12 +205,15 @@ a separate, explicit task — report what it needs instead of reaching into it.
 ### T1DMDROID has two branches, and most work belongs on both
 
 `T1DMDROID` keeps `main` and `private`. Both carry the reverse-engineered
-connected-session work — the connected sources, the session crypto, the protocol
-document. One thing separates them: `private` reads a sensor past its rated life;
-`main` shows the sensor expired, stores and alarms on nothing past expiry, and
-carries no in-app reset. Both are local-only and unpublished: `.git/hooks/pre-push`
-refuses every ref, and `scripts/publish-audit.sh` rejects either branch, since both
-carry the connected-session protocol.
+connected-session work — the connected sources and the session crypto. One thing
+separates them: `private` reads a sensor past its rated life; `main` shows the
+sensor expired, stores and alarms on nothing past expiry, and carries no in-app
+reset. `main` is published; `private` is local-only. `.git/hooks/pre-push` allows
+`main` alone and runs `private`'s `scripts/check-no-reset.sh` and
+`scripts/publish-audit.sh` against the pushed commit: no commit of `main` may carry
+the sensor reset, a `docs/CGM.md` beyond the advert-only copies already public, or
+a real sensor serial. `docs/CGM.md` is tracked on `private`; on `main` it is a
+gitignored local file.
 
 **Unless a change touches that expiry seam, it lands on both branches.** A
 forecast fix, a UI change, a calculator rail, a schema migration, a dependency

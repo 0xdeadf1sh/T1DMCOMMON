@@ -44,10 +44,10 @@ none is still bound by `../CLAUDE.md` and `SPEC/`.
 Current at the time of writing — verify against the project:
 
 - **`T1DMDROID` / `publish-audit`** — mandatory before anything leaves that
-  repository. Both its branches are local-only and carry reverse-engineered sensor
-  protocol and real patient data, and it has twice had to be deleted after that
-  content reached GitHub. Never push, add a remote, or
-  create a repository there without running it.
+  repository. `main` is published; `private` is local-only and carries the
+  protocol document, the sensor reset and real patient data. The repository has
+  twice had to be deleted after private content reached GitHub. Never push, add a
+  remote, or create a repository there without running it.
 - **`T1DMDROID` / `terse-ui-text`** — read before writing any user-facing string.
 - **`T1DMDROID` / `android-device-testing`** — the build/deploy/screenshot loop.
 - **`T1DMDROID` gates, local only** — `:calc:testDebugUnitTest` (rail invariants
