@@ -5,7 +5,8 @@ data, pushes to paired BLE peripherals over the watch link, and can mirror a
 subset outward — see *Outbound destinations*.
 
 Kotlin + Compose, multi-module Gradle, with a Rust core (`crates/t1dm-core`) over
-JNI. MIT. Sideload-only, never a store listing. Targets exactly one phone.
+JNI. MIT. Sideload-only, never a store listing. Android 12+ on arm64-v8a and
+x86_64; tested on one phone.
 
 > Some of this project's knowledge is **deliberately not here**: device protocol
 > work, the branch seam, and safety-override design stay in the project's own
@@ -25,9 +26,16 @@ and must never block.
 
 ## Target device
 
-**Redmi K90 Max** (`ro.product.model 2604FRK1EC`, adb codename `prague`),
-**MediaTek Dimensity 9500 / MT6993**, NPU **APU 990**, Android **16** / SDK
-**36**, HyperOS OS3.0, arm64-v8a only, ~16 GB RAM, 165 Hz panel. Step counter
+**Floor: Android 12 / API 31. ABIs: arm64-v8a and x86_64**, one list,
+`t1dm.abis` in `gradle.properties`, read by the cargo-ndk cross-build and every
+`abiFilters`. Release lint runs with `NewApi` fatal and `checkDependencies`, so an
+unguarded call above API 31 in any module, JVM modules included, fails the build.
+Below API 33 and on x86_64 nothing has run on hardware; that path has run on an
+x86_64 API 31 emulator, which has no Bluetooth.
+
+The test phone: **Redmi K90 Max** (`ro.product.model 2604FRK1EC`, adb codename
+`prague`), **MediaTek Dimensity 9500 / MT6993**, NPU **APU 990**, Android **16** /
+SDK **36**, HyperOS OS3.0, arm64-v8a, ~16 GB RAM, 165 Hz panel. Step counter
 present.
 
 The NPU stack is **NeuroPilot / Neuron**, not NNAPI (deprecated on Android 16) —
@@ -313,6 +321,39 @@ also needs a physical tap unless "Install via USB" is enabled.
 `POST_NOTIFICATIONS` prompts even after `install -g`; grant it before a scripted
 launch or the dialog stalls the launch.
 
+## Platform traps — Android 12 and other phone makers
+
+**Below API 33 the GATT stack calls only the value-less callbacks**, with the
+bytes on the shared characteristic. A callback that overrides only the
+value-carrying `onCharacteristicChanged`/`onCharacteristicRead` receives nothing
+on 31–32, silently. Every transport extends `core:ble`'s `GattCallbackCompat`
+(both generations reach `onNotify`/`onRead`) and writes through
+`writeCharacteristicCompat`/`writeDescriptorCompat`. The debug AiDEX probes are
+`@RequiresApi(33)`.
+
+**A random-address handle needs API 33** (`getRemoteLeDevice`). Below it
+`remoteLeDeviceCompat` returns null for a random address, so a CT5 is found by
+scan rather than redialled at its stored address; a public AiDEX address still
+dials.
+
+**Exact alarms.** `USE_EXACT_ALARM` exists from 33; 31–32 hold
+`SCHEDULE_EXACT_ALARM`, pre-granted and revocable. A revoked grant schedules the
+alert repeat inexactly rather than not at all.
+
+**A background foreground-service start is refused from 31** unless the app is
+exempt from battery optimization. The CGM watchdog's restart depends on it; the
+app asks for the exemption once per install.
+
+**Phone makers add their own kill switches** — autostart, sleeping apps, app
+launch — whose state no app can read. Settings › Background opens the maker's
+page by component name and falls back to the app's details page, since the
+components move between OS releases. Only the Xiaomi component is confirmed to
+exist, on the test phone.
+
+**uniffi's bindings reference `java.lang.ref.Cleaner`** (API 33). They probe for
+it by reflection and fall back to JNA's cleaner, so `core/native/lint.xml`
+ignores `NewApi` in the generated sources only.
+
 ## Build traps
 
 - **`cargo test -p <libs>` skips the root binary.** A non-exhaustive match in a
@@ -336,6 +377,9 @@ launch or the dialog stalls the launch.
   under `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, then the first SDK path set
   (`ANDROID_HOME`, `ANDROID_SDK_ROOT`, `local.properties`), so an SDK without
   `ndk/` skips even when a later path has one.
+- **Lint runs inside the Gradle JVM** (`android.experimental.runLintInProcess`).
+  Release lint covers every module; a separate lint JVM beside the Gradle one
+  exceeds a 4 GB build cap and is OOM-killed.
 - **Wrapping arithmetic in checksums.** A checksum that summed in wider precision
   than the specification passed every published golden vector — none of which
   overflowed — while failing on real data, where the fail-closed gate then dropped
