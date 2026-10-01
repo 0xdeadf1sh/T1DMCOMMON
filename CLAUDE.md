@@ -212,7 +212,7 @@ reset. `main` is published; `private` is local-only. `.git/hooks/pre-push` allow
 `main` alone and runs `private`'s `scripts/check-no-reset.sh` and
 `scripts/publish-audit.sh` against the pushed commit: no commit of `main` may carry
 the sensor reset, a `docs/CGM.md` beyond the advert-only copies already public, or
-a real sensor serial. `docs/CGM.md` is tracked on `private`; on `main` it is a
+a real sensor serial or account ID. `docs/CGM.md` is tracked on `private`; on `main` it is a
 gitignored local file.
 
 **Unless a change touches that expiry seam, it lands on both branches.** A
