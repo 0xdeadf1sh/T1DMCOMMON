@@ -118,7 +118,7 @@ shape.** One adapter per kind may be attached to a model. The forecast adapter
 serves the live cycle, the dose path and the backtest; an infill or backcast
 adapter serves the BG panel's fills of its shape. A fit trains on windows of its
 own kind alone, drawn from up to a year of every sensor's measured readings; where
-two sensors overlap in time, the trusted one keeps the window. A window is
+two sensors overlap in time, the authoritative one keeps the window. A window is
 admitted only if no meal or bolus starts inside its predicted span. Candidates sit
 on an hourly grid and, for each meal or bolus, immediately beside it: the span
 opens on the step after it, or, for a backcast, closes on the step before it.
@@ -176,14 +176,16 @@ forecaster without a descriptor and an artifact, so a device with no `.pte`
 publishes no forecast, and neither does the warm-up window.
 
 **A backtest scores a model on days it did not forecast.** The Models drill-down
-replays the last 1–14 days through one model as it runs now — offset, adapter,
-smoothing — one forecast per measured slot, each built from what the phone had
+replays the last 7, 14 or 30 days through one model as it runs now — offset,
+adapter, smoothing — on each chosen sensor, the authoritative one by default: one
+forecast per measured slot, each built from that sensor's readings and what the phone had
 logged by then: readings by `rxWallMs` (the sensor's own sample instant over the
 connected session), meals and doses by `loggedAtMs`, fills and promoted
 reconstructions by the fill's creation. An edit or deletion made after the
 replayed instant shows in the replay. The replayed
-forecasts are paired with realized BG by the stored forecasts' rule and scored by
-the same suite. Nothing is written to `prediction`; nothing reaches the band fit,
+forecasts are paired with their own sensor's realized BG by the stored forecasts'
+rule and scored, pooled across sensors, by the same suite. Only the authoritative
+sensor gets fills. Nothing is written to `prediction`; nothing reaches the band fit,
 the hindsight sweep, an alarm or a dose. An attached adapter scores in-sample on
 the days it was fitted on.
 

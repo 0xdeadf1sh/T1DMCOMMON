@@ -490,9 +490,12 @@ The rate grid is scored only where the band actually missed.
 are retained and the BG panel may be switched to it. Exactly one is also
 **authoritative**.
 
-The authoritative source is the sole input to the forecast, the statistics, the
-alarm engine and every outbound destination. Another active source's readings
-reach nothing else.
+The forecast runs on every active source, each on its own readings. The
+authoritative source is the sole input to the statistics, the alarm engine, the
+dose calculator, the band fit, live accuracy and every outbound destination, and
+its forecast is the only one they read. Another active source's forecast reaches
+the BG panel while that source is shown, its hindsight, and the backtest; its
+readings otherwise reach only the adapter fit.
 
 Authority implies activity; the converse does not hold.
 
