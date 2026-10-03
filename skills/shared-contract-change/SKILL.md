@@ -3,7 +3,8 @@ name: shared-contract-change
 description: >-
   MANDATORY before changing anything the T1DM sister repositories share — the five-minute grid,
   tz_offset, physiologic units or scales, either Kovatchev risk space, the curve mathematics, the
-  quantile/circadian forecast layout, the model descriptor format, or the watch link. These exist in more
+  quantile/circadian forecast layout, the model descriptor format, the metric
+  definitions, or the watch link. These exist in more
   than one repository, in more than one language, and drift between them is silent — both sides
   keep working and one of them is wrong. Triggers: editing curve.rs, units.rs, KovatchevRisk.kt,
   GridStamper.kt, an exporter, or any constant this document names.
@@ -38,7 +39,7 @@ If `SPEC/` states the rule, amend it there before touching any implementation.
 If `SPEC/` does not state it yet, add it. An implementation change that leaves
 the spec stale has moved the drift rather than fixed it.
 
-`invariants.md`, `inference.md` and `cache.md` are **single-copy**. Amend the original; never bring a copy back into a project, and never paste a changed
+`invariants.md`, `inference.md`, `cache.md` and `watch.md` are **single-copy**. Amend the original; never bring a copy back into a project, and never paste a changed
 section into a consumer's documentation. A project's `docs/` entry is a stub
 naming the specification and carrying only what is local to that project.
 `scripts/check-no-copies.sh` enforces this.
