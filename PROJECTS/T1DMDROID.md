@@ -63,10 +63,6 @@ register never loads. A model reaches the phone by `adb push` of its `.pte` and
 feature delivery, which a sideload-only build cannot fetch, and the stock
 ExecuTorch AAR registers the XNNPACK CPU delegate and nothing else.
 
-`../T1DMDROID-vk-build` is a separate checkout carrying the Vulkan compute
-delegate and its vendored `EXECUTORCH_BUILD_VULKAN=ON` AAR. It is not the project
-and its backend is not one `T1DMDROID` has.
-
 Everything numerically sensitive — the Savitzky-Golay causal smoother,
 normalize/denormalize, the Kovatchev transform and its inverse, quantile assembly
 — runs in the **fp32/fp64 Rust core on CPU**. Only the transformer core runs in
@@ -176,9 +172,9 @@ forecaster without a descriptor and an artifact, so a device with no `.pte`
 publishes no forecast, and neither does the warm-up window.
 
 **A backtest scores a model on days it did not forecast.** The Models drill-down
-replays the last 7, 14 or 30 days through one model as it runs now — offset,
-adapter, smoothing — on each chosen sensor, the authoritative one by default: one
-forecast per measured slot, each built from that sensor's readings and what the phone had
+replays the last 30 or 90 days, or the whole record, through one model as it runs
+now — offset, adapter, smoothing — on every sensor with readings, hidden ones
+included: one forecast per measured slot, each built from that sensor's readings and what the phone had
 logged by then: readings by `rxWallMs` (the sensor's own sample instant over the
 connected session), meals and doses by `loggedAtMs`, fills and promoted
 reconstructions by the fill's creation. An edit or deletion made after the

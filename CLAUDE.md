@@ -33,10 +33,8 @@ Before doing anything in a project, read, in this order:
 `CGM.md` must **never** be promoted here, in any part: see *What must never enter
 this repository*.
 
-Two cautions on the layout. `T1DMDROID`'s skills are mandatory gates in their own
-right, and its build and branch discipline live in its `CLAUDE.md` rather than
-here. And `../T1DMDROID-vk-build` is a build variant, not the project — do not
-work in it.
+`T1DMDROID`'s skills are mandatory gates in their own right, and its build and
+branch discipline live in its `CLAUDE.md` rather than here.
 
 Write only to the project you were asked to change. Read the others freely.
 

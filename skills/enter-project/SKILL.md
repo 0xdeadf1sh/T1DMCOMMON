@@ -22,9 +22,6 @@ Map the request to exactly one of `../T1DMSIM`, `../T1DMAI`, `../T1DMDROID`,
 request spanning two is a cross-repository change: read
 `shared-contract-change` as well, and still write to only one.
 
-`../T1DMDROID-vk-build` is a build variant sitting beside the real checkout, not
-the project.
-
 ## 2. Read the project in
 
 In order:
