@@ -23,7 +23,7 @@ euglycaemic zero-risk centre sits near 128 mg/dL rather than 112.5.
 
 **No model input carries exercise.** Neither layout has the channel, no
 production, normalisation, export, GUI or metric path reads it, and the exported
-descriptor declares four features with three statistics keys.
+descriptor's statistics key exactly its `inputs.channels`.
 `../SPEC/inference.md` §6 fixes that input and what carbohydrate and insulin
 mean in it; `../SPEC/invariants.md` §3 and §5 keep the unit and the disposal
 curve for `T1DMDROID`'s record alone.
@@ -88,8 +88,8 @@ dose at its onset step, read from a cache built with `cache_simulator.py
 --events`, whose `normalization_stats_events.json` is its statistics.
 `normalization.py` pins the normalized counts at 3 and 9 — `../SPEC/inference.md`
 §6 fixes the first, `T1DMSIM`'s `EVENT_CHANNELS` the second. A checkpoint is stamped
-`input_layout` and is one or the other. An `events` checkpoint does not export:
-the descriptor and the on-device feature builder are `curves` only.
+`input_layout` and is one or the other; both export, the descriptor's `inputs`
+block carrying the layout, the masked-channel policy and each channel's transform.
 
 ## Checkpoints and metrics provenance
 

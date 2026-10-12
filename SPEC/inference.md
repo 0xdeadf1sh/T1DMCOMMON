@@ -92,7 +92,8 @@ ckpt = torch.load("t1dmai.pt", map_location="cpu", weights_only=False)
 | `model_ema_state_dict` | EMA shadow weights (same keys) | **use these** |
 | `weighting_state_dict` | `{log_sigma_Q, log_sigma_D}` | no (loss only) |
 | `muon_optimizer_state_dict`, `adam_optimizer_state_dict` | optimizer state | no (bloat) |
-| `training_config` | dict of shape/hparam scalars | rebuild the graph |
+| `training_config` | dict of shape/hparam scalars; `masked_channel_policy` (§7.3) | rebuild the graph |
+| `input_layout` | `'curves'` or `'events'` (§6); absent reads as `'curves'` | **yes** |
 | `normalization_stats` | `{channel: {mean, std}}` | **yes** |
 | `conformal_delta`, `conformal_meta` | optional band recalibration (§8.4) | optional |
 | `master_seed`, `loss_history`, `val_history`, `loss_ema`, `best_val_*` | telemetry | no |
@@ -362,8 +363,27 @@ the wrong range it cannot fire at all.
 
 ## 6. Normalization (raw ↔ z-score)
 
-Three normalized channels, fixed order — the index **is** the model input-feature
-index:
+A checkpoint is trained on one of two **input layouts** and accepts only that one:
+`curves` (this section's channels, the default) or `events`
+([§6.1](#61-the-events-layout)). The exported descriptor names it in its `inputs`
+block:
+
+```json
+"inputs": {
+  "layout": "curves" | "events",
+  "masked_channel_policy": "announced" | "blind",
+  "channels": [{"name": "bg_absolute", "transform": "kovatchev"},
+               {"name": "carb_intake", "transform": "log1p"}, ...,
+               {"name": "carb_gi", "transform": "log_ratio", "ref": 50.0}, ...]
+}
+```
+
+`channels` lists the normalized channels in feature order; the `bg_masked` bit
+follows them. `normalization_stats` keys exactly these names. A descriptor with no
+`inputs` block predates it and is `curves` / `announced`.
+
+Three normalized channels under `curves`, fixed order — the index **is** the model
+input-feature index:
 
 ```
 CHANNEL_NAMES = ['bg_absolute', 'carb_intake', 'insulin_combined']
@@ -420,6 +440,42 @@ The BG mean/std live in **risk space** (fit on `f(bg)`); the other two in log1p
 space. All three keys are required, each with `std > 0`. Prefer the checkpoint's
 embedded stats — they are exactly what the model was trained with.
 
+### 6.1 The events layout
+
+Nine normalized channels: `bg_absolute`, then each dose at its **onset step** only
+(`T1DMSIM/simulator.EVENT_CHANNELS`, this order):
+
+| channel | raw value on a dosed step | transform |
+|---|---|---|
+| `carb_g` | grams | `log1p` |
+| `carb_gi` | glycaemic index | `log_ratio`, ref 50 |
+| `bolus_u` | units | `log1p` |
+| `bolus_peak_min` | minutes to peak action | `log_ratio`, ref 60 |
+| `bolus_dur_h` | hours of action | `log_ratio`, ref 5 |
+| `basal_u` | units | `log1p` |
+| `basal_peak_min` | minutes to peak action | `log_ratio`, ref 60 |
+| `basal_dur_h` | hours of action | `log_ratio`, ref 5 |
+
+`log_ratio` is `ln(max(x, 1e-6) / ref)` where `x > 0`, else `0`; its stats are
+fixed at mean 0, std 1 and it has **no inverse** (no dose and a dose at `ref` both
+map to 0). Every non-dosed step is 0 raw. `N_INPUT_FEATURES = 10`, `PATCH_DIM = 60`,
+`bg_masked` at feat 9.
+
+**From a logged dose** — the rule the phone corpus was converted under
+(`T1DMAI/t1dmdroid_converter.py`), which a consumer must reproduce:
+
+- **Onset.** `round((ts − grid_start) / 5 min)`; a dose whose onset falls outside the
+  window is absent, whatever its action tail. Doses sharing a step sum; their
+  descriptors are dose-weighted means.
+- **Meal.** Its stored GI, or 50 where none is stored (a multi-food meal).
+- **Insulin**, first match wins: a stored per-step curve → peak at its first
+  maximum (`argmax · 5` min), duration its length; a basal → the Bateman peak
+  `60 · ln(ka/ke) / (ka − ke)` min (glargine U100 `ka`/`ke` where unstored) and the
+  stored duration; a bolus with stored gamma `k`, `θ` → `(k − 1) · θ` min and the
+  stored duration; otherwise aspart's dose-scaled gamma (`bolus_pk_for_dose`).
+- **Logged doses only.** A basal schedule produces no event; only a logged
+  injection does.
+
 ---
 
 ## 7. Input construction (the frozen index map)
@@ -429,7 +485,9 @@ Per timestep the features are
 feats 0–2 are §6's normalized channels in that order, feat 3 the per-patch mask
 bit (§7.3). The output-channel → input-feature map is
 `CHANNEL_TO_FEAT = {0: 1, 1: 2}` (carb-channel 0 → feat 1, insulin-channel 1 →
-feat 2). BG (feat 0) is never overrideable.
+feat 2). BG (feat 0) is never overrideable. Under `events` the same rule holds
+over §6.1's channels: feats 0–8, the bit at feat 9, `N_INPUT_FEATURES = 10`. The
+figures below are the `curves` ones.
 
 **Patch flatten order is step-major:** `(PATCH_SIZE, N_INPUT_FEATURES) →
 PATCH_DIM` via a C-contiguous reshape:
@@ -484,6 +542,11 @@ A masked patch withholds its BG and announces that it did:
   itself. Overwrite these slots with **announced** future doses (normalized) to
   condition the forecast; never write into them anything the patient did not
   announce.
+- **Under `masked_channel_policy: blind`** every dose feat of **every** masked patch
+  — context spans and the future zone alike — is `normalize(0)`, and nothing is
+  announced. The model was trained never to read a dose in a masked patch, so a
+  future dose reaches a forecast only once it lies in visible context: within one
+  forward, every candidate dose draws the same fan.
 
 The `P = PREDICTION_PATCHES` future patches carry no observed BG at all, so all of
 them are masked. A masked set totals at most `MAX_MASKED_PATCHES` patches, and at

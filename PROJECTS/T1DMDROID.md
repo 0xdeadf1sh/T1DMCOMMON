@@ -75,10 +75,18 @@ constants — the app never parses a checkpoint pickle, and parses the descripto
 in the shape the exporter writes rather than projecting it onto a second schema.
 `../SPEC/invariants.md` §4 says why those constants come from the descriptor.
 
-**The model input carries no exercise.** `crates/t1dm-core/src/preproc.rs` pins
-the four features of `../SPEC/inference.md` §6–7 and refuses a descriptor
-declaring any other count. The app keeps its exercise record and its panels, and
-none of it reaches a forecast.
+**The model input carries no exercise.** `crates/t1dm-core/src/preproc.rs` takes
+either layout of `../SPEC/inference.md` §6–7 from the descriptor's `inputs` block
+and refuses any other channel list or feature count. The app keeps its exercise
+record and its panels, and none of it reaches a forecast.
+
+**An events model reads logged rows.** `curve.rs` `point_dose` turns a stored
+row into its onset descriptors and `event_channels` lays them on the grid, pinned
+by `testdata/pipeline_golden_events.json` to the converter that built the
+training corpus. The basal schedule produces no event. A blind model
+(`masked_channel_policy: blind`) is given no announced dose: the dose advisor
+refuses, the sensitivity probe withholds, and an adapter fit has no
+counterfactual and so no verdict.
 
 **The masked set is an input, not the trailing horizon.** It crosses as a one-hot
 selection matrix naming the patch each head slot reads, so forecast, backcast and
