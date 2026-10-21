@@ -111,7 +111,10 @@ in the tree loads or decodes against the current architecture.
 ## The model zoo
 
 `zoo/` holds the comparison models: persistence, linear extrapolation, ridge
-AR/ARX, SVR, sparse GP, Kalman, LSTM, GluNet, PatchTST, N-HiTS and Chronos-Bolt.
+AR/ARX, SVR, sparse GP, Kalman, XGBoost, LSTM, GluNet, PatchTST, N-HiTS and
+Chronos-Bolt. XGBoost fits with the `xgboost` package and exports as a torch
+gather walk over its node table; its split thresholds sit a margin below each cut
+so float32 and float64 inputs take the same branch.
 All are scored on the MetaboNet live leaderboard by `zoo.run`, beside the
 transformer's own submissions through `zoo.score`; `zoo_runs/leaderboard.md` is
 the table. Two tracks: what-if, with doses after the origin as logged, and
