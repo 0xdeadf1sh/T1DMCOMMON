@@ -197,9 +197,11 @@ the days it was fitted on.
 (`../SPEC/zoo.md`) imports through the same zip path, and `ModelStore.discover`
 skips it so the transformer path never sees it. `ZooController` loads it, runs it
 each forecast tick from `fitBgSeries` and `ChannelBuilder.rawDoseSlots`, and
-publishes its own predictions flow. A zoo model is never selected, never persisted
-to `prediction`, and never reaches an alarm, the glance, the watch, the dose
-advisor, an adapter or the band fit. The bg window fill and the fan are in the Rust
+publishes its own predictions flow. A zoo model may be selected: `InferenceController.onZoo`
+then puts its forecast first in `InferenceState.predictions` and persists it, so the
+graph, glance, watch and predicted-excursion alarms follow it. `authorityModelInfo`
+stays null, so the dose advisor and the sensitivity probe withhold; no adapter or band
+fit takes it. The bg window fill and the fan are in the Rust
 core (`zoo.rs`), pinned to `T1DMAI`'s `zoo.golden` vectors.
 
 **Compare** builds one backtest plan sized to the longest context of every loaded

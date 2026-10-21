@@ -66,4 +66,7 @@ The offsets are split-conformal: per slot, the empirical quantiles of
 ## 5. What a zoo model is not
 
 No dose advice, no dose-response probe, no adapter, no infill or backcast, no
-circadian estimate. A consumer routes a zoo model to display and backtest only.
+circadian estimate. A zoo model carries no counterfactual dose response, so a
+consumer may select it to drive the displayed forecast and the predicted-excursion
+alarms, but never routes it to a dose recommendation or a sensitivity estimate:
+while one is selected, those withhold.

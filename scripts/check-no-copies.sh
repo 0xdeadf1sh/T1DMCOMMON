@@ -49,7 +49,7 @@ cat >"$PATDIR/zoo" <<'EOF'
 A zoo model is a direct forecaster
 so the fan's median is the median line
 Interpolated, reconstructed and carry-forward values never stand in
-A consumer routes a zoo model to display and backtest only
+A zoo model carries no counterfactual dose response
 EOF
 
 # One pass per spec over authored text; build output, VCS metadata and artifacts are excluded.
