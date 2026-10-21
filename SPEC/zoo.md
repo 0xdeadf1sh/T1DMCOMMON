@@ -67,8 +67,3 @@ The offsets are split-conformal: per slot, the empirical quantiles of
 
 No dose advice, no dose-response probe, no adapter, no infill or backcast, no
 circadian estimate. A consumer routes a zoo model to display and backtest only.
-
-## Known deviations
-
-1. **`T1DMDROID` loads no zoo bundle.** `ModelStore` parses every descriptor as
-   an `inference.md` descriptor, so a `t1dm-zoo-1` import is refused.

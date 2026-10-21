@@ -193,6 +193,19 @@ sensor gets fills. Nothing is written to `prediction`; nothing reaches the band 
 the hindsight sweep, an alarm or a dose. An attached adapter scores in-sample on
 the days it was fitted on.
 
+**Zoo models are a second family, kept apart.** A `t1dm-zoo-1` bundle
+(`../SPEC/zoo.md`) imports through the same zip path, and `ModelStore.discover`
+skips it so the transformer path never sees it. `ZooController` loads it, runs it
+each forecast tick from `fitBgSeries` and `ChannelBuilder.rawDoseSlots`, and
+publishes its own predictions flow. A zoo model is never selected, never persisted
+to `prediction`, and never reaches an alarm, the glance, the watch, the dose
+advisor, an adapter or the band fit. The bg window fill and the fan are in the Rust
+core (`zoo.rs`), pinned to `T1DMAI`'s `zoo.golden` vectors.
+
+**Compare** builds one backtest plan sized to the longest context of every loaded
+model, runs each model on it, and scores each only on the origins all of them
+forecast, so the ranking is on shared windows.
+
 ## Safety posture
 
 **Advisory only. The app never actuates insulin** — no pump, no closed loop. It
