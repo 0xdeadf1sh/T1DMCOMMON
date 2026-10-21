@@ -107,8 +107,8 @@ restate it, re-derive it, or re-hardcode it. If you find an existing duplicate,
 report it rather than adding a third.
 
 **Specifications are single-copy, and that is checked.** `SPEC/invariants.md`,
-`SPEC/inference.md`, `SPEC/cache.md` and `SPEC/watch.md` exist here and nowhere
-else. A project
+`SPEC/inference.md`, `SPEC/cache.md`, `SPEC/watch.md` and `SPEC/zoo.md` exist here
+and nowhere else. A project
 that needs one keeps a **stub** at the path its readers expect, naming this
 document, pointing at the sibling checkout, and carrying only what is local to
 that project. Never restore a copy.
@@ -163,6 +163,7 @@ Changing any of these in one repository obliges you to check its counterparts:
 | The pretraining cache: row geometry, tail arms, doses, meta keys | `SPEC/cache.md` | `T1DMSIM` → `T1DMAI` |
 | The conformal band correction — its apply AND its fit | `SPEC/inference.md` §8.4 | `T1DMAI` ↔ `T1DMDROID` |
 | The watch link: pairing, session crypto, record layouts | `SPEC/watch.md` | `T1DMDROID` → `T1DMKDE`, `T1DMAUTO` |
+| The zoo descriptor, window inputs, conformal band offsets | `SPEC/zoo.md` | `T1DMAI` → `T1DMDROID` |
 
 Anything on that list is a cross-repository change. Read
 `skills/shared-contract-change` before touching it.

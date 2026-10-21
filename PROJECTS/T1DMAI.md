@@ -108,6 +108,24 @@ none of the strict load sites; every exported descriptor beside them stamps
 `arch_version risk-v3` with a `BG_CLAMP_MIN` of 40. No checkpoint and no export
 in the tree loads or decodes against the current architecture.
 
+## The model zoo
+
+`zoo/` holds the comparison models: persistence, linear extrapolation, ridge
+AR/ARX, SVR, sparse GP, Kalman, LSTM, GluNet, PatchTST, N-HiTS and Chronos-Bolt.
+All are scored on the MetaboNet live leaderboard by `zoo.run`, beside the
+transformer's own submissions through `zoo.score`; `zoo_runs/leaderboard.md` is
+the table. Two tracks: what-if, with doses after the origin as logged, and
+`--causal`, with them zeroed. On closed-loop sources the logged future insulin is
+the pump reacting to glucose not yet seen, so only the causal track describes a
+live forecast.
+
+Each model's `graph()` is built from the code its fit uses, so the exported
+`.pte` and the scored model are one implementation. `zoo.export` writes the
+bundle of `../SPEC/zoo.md`.
+
+Chronos-Bolt is a plain-torch port with no `transformers` dependency, pinned to
+the reference pipeline by `tests/data/chronos_bolt_golden.json`.
+
 ## Where the documentation splits
 
 `ARCHITECTURE.md` is the **producer** side: dimensions, blocks, heads, the loss

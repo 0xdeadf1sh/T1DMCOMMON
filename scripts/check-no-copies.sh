@@ -45,9 +45,14 @@ that no central drives; a peripheral does not implement it
 slot it covers, empty ones included
 are unauthenticated, so none touches a key. The central drops the connection
 EOF
+cat >"$PATDIR/zoo" <<'EOF'
+A zoo model is a direct forecaster
+so the fan's median is the median line
+Interpolated, reconstructed and carry-forward values never stand in
+A consumer routes a zoo model to display and backtest only
+EOF
 
-# One recursive pass per spec. --include keeps it to text the suite authors;
-# --exclude-dir keeps build output, VCS metadata and artifacts out of the walk.
+# One pass per spec over authored text; build output, VCS metadata and artifacts are excluded.
 scan() {
   grep -rHoFf "$1" \
     --include='*.md' --include='*.txt' --include='*.rs' --include='*.kt' \
@@ -77,6 +82,7 @@ check_spec 'SPEC/inference.md'  "$PATDIR/inference"
 check_spec 'SPEC/invariants.md' "$PATDIR/invariants"
 check_spec 'SPEC/cache.md'      "$PATDIR/cache"
 check_spec 'SPEC/watch.md'      "$PATDIR/watch"
+check_spec 'SPEC/zoo.md'        "$PATDIR/zoo"
 
 if [ $fail -ne 0 ]; then
   cat <<'EOF'
