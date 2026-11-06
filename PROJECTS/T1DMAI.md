@@ -93,9 +93,11 @@ block carrying the layout, the masked-channel policy and each channel's transfor
 
 ## Checkpoints and metrics provenance
 
-**Every checkpoint carries a `spread_tie_beta` buffer**, the β of
-`../SPEC/inference.md` §8.1's span-tied spreads. One without it — anything trained
-before the tie — fails a strict load and the exporter refuses it.
+**Every checkpoint carries `spread_tie_beta` and `spread_growth` buffers**: the β
+of `../SPEC/inference.md` §8.1's span-tied spreads, and the mark of their
+√-distance growth. One without either fails a strict load and the exporter refuses
+it. `models/t1dm-v0.1.0` has the tie and no growth; its 90% band covered 0.96 at
+30 min and 0.81 at 120 min, the constant-width signature the growth removes.
 
 A checkpoint is self-contained: it embeds the training configuration and
 normalization statistics. Inference merges the EMA state dict over the plain one.
