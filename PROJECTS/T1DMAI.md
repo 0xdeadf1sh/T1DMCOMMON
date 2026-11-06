@@ -93,10 +93,9 @@ block carrying the layout, the masked-channel policy and each channel's transfor
 
 ## Checkpoints and metrics provenance
 
-**A checkpoint trained with `SPREAD_TIE_TO_MEDIAN` decodes outside
-`../SPEC/inference.md` §8.1.** Its spreads are span means scaled by the median's
-excursion, and it carries a `spread_tie_beta` buffer. The exporter refuses it, so
-no such model reaches `T1DMDROID`.
+**Every checkpoint carries a `spread_tie_beta` buffer**, the β of
+`../SPEC/inference.md` §8.1's span-tied spreads. One without it — anything trained
+before the tie — fails a strict load and the exporter refuses it.
 
 A checkpoint is self-contained: it embeds the training configuration and
 normalization statistics. Inference merges the EMA state dict over the plain one.

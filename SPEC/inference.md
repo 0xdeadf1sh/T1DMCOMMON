@@ -600,15 +600,20 @@ objective admits.
 `QUANTILE_LEVELS = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)`, median column
 index `3`.
 
-### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, valid=None, carry_spread=0.0)`
+### 8.1 `assemble_quantiles(head_raw, anchor_bg, mask_idx, valid=None, carry_spread=0.0, *, tie_beta)`
 
 `head_raw` is `(B, M, S, 7)`: column 0 = median delta; columns 1..3 = the τ>.5
 spreads (nearest→far, .75/.9/.95); columns 4..6 = the τ<.5 spreads (nearest→far,
 .25/.1/.05).
 
-The assembly is pointwise per `(slot, step)`: it groups nothing and low-passes
-nothing. Spans enter the decode one stage earlier, in the step-state spline
-([§8.2](#82-the-step-state-spline)).
+The median is pointwise per `(slot, step)`. The spreads are tied to their span:
+each level's spread is its mean over every step of the span's slots, scaled per
+step by the median's own excursion from the anchor. A span is a maximal run of
+valid slots whose `mask_idx` increase by one, the grouping of
+[§8.2](#82-the-step-state-spline).
+
+`tie_beta` is the descriptor's `constants.SPREAD_TIE_BETA`, the checkpoint's
+`spread_tie_beta` buffer. A descriptor without it is refused: no other fan decodes.
 
 ```
 anchor = f( clamp(anchor_bg, BG_CLAMP_MIN, BG_CLAMP_MAX) )  # (B, M), risk; flat over S
@@ -618,7 +623,9 @@ delta  = head_raw[..., 0]                                   # (B, M, S)
 m = anchor[..., None] + delta                               # (B, M, S)
 
 # --- spreads ---
-spread = softplus(head_raw[..., 1:]) + 1e-3              # strict positive floor
+raw    = softplus(head_raw[..., 1:]) + 1e-3              # strict positive floor
+mean   = span_mean(raw)                                  # (B, M, 6): over the span's L·S steps
+spread = mean[:, :, None, :] * (1 + tie_beta·|delta|)[..., None]   # (B, M, S, 6)
 d_up   = spread[..., :3]                                 # .75/.9/.95
 d_dn   = spread[..., 3:]                                 # .25/.1/.05
 c_up   = carry_spread[..., :3]                           # .75/.9/.95
@@ -633,6 +640,10 @@ initialization (`delta ≈ 0`) it is `≈ anchor`, a flat persistence forecast. 
 smoothness comes from the step states the head reads, not from this assembly
 ([§8.2](#82-the-step-state-spline)). The `cumsum` of strictly-positive spreads
 guarantees a monotone ascending fan around the median.
+
+The band's time profile is the median's: where the median dives, every edge dives
+with it and widens by `tie_beta·|delta|`. In training `delta` enters the scale
+detached, so the pinball loss cannot bend the median through the band.
 
 `carry_spread` is **per level**, in `head_raw[..., 1:]`'s own layout —
 `[.75 .9 .95 | .25 .1 .05]`, six risk-space offsets — and defaults to `0` (only
@@ -897,6 +908,7 @@ Everything a from-scratch reimplementation needs (none require the simulator):
 | `QUANTILE_LEVELS` | `(.05, .1, .25, .5, .75, .9, .95)`; median idx `3` |
 | `N_SPREADS` / `N_QUANTILES` | `3` / `7` |
 | `BG_QUANTILE_SPREAD_MIN` | `1e-3` |
+| `SPREAD_TIE_BETA` | **descriptor-carried** (`constants`), from the checkpoint's `spread_tie_beta` buffer (§8.1) |
 | `MAX_MASKED_PATCHES` (M) | **checkpoint-carried** (§3.1); surplus slots are padded and discarded |
 | `ROPE_BASE` | `1000` |
 | RMSNorm `eps` | `1e-6` |
@@ -925,7 +937,8 @@ space, carb/insulin in log1p space).
   patch flatten; the masked-patch fill (feat 0 zeroed, feat 3 set, the maskable
   feats at `normalize(0)` or the announced plan); the bool attention mask; the
   step-state spline (§8.2) and the head MLP over its output;
-  `assemble_quantiles` (softplus, cumsum); and the optional conformal apply.
+  `assemble_quantiles` (softplus, span mean, median-scaled tie, cumsum); and the
+  optional conformal apply.
 - **Watch the `bg_masked` bit.** Nothing else writes feat 3, so a builder that
   forgets it announces every masked patch as an observation, with every shape still
   matching and every fan still monotone.

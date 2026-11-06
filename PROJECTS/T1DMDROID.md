@@ -59,6 +59,11 @@ declaring any other engine, so a model built for a delegate this runtime does no
 register never loads. A model reaches the phone by `adb push` of its `.pte` and
 `descriptor.json` into the app's external-files `models/` directory.
 
+**Only a span-tied fan decodes.** `parse_descriptor` refuses a descriptor without
+`constants.SPREAD_TIE_BETA` (`../SPEC/inference.md` §8.1), so no model exported
+before the tie loads. The adapter fit's backward holds the tie's `1 + β·|delta|`
+scale constant, as training does.
+
 **There is no GPU or NPU inference.** The NeuroPilot runtime ships through Play
 feature delivery, which a sideload-only build cannot fetch, and the stock
 ExecuTorch AAR registers the XNNPACK CPU delegate and nothing else.
