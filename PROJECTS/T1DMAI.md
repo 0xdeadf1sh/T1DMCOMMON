@@ -46,7 +46,7 @@ position input, and nothing about the spline is stored in the checkpoint. The DI
 shape/time term of the loss is unchanged. `../SPEC/inference.md` §8.2 carries the
 node rule, the coordinate and the weights.
 
-**Configured capacity** — `D_MODEL` 16, `N_LAYERS` 16, `N_HEADS` 1, set through
+**Configured capacity** — `D_MODEL` 32, `N_LAYERS` 32, `N_HEADS` 1, set through
 `resize_model.py`. Context window `[168, 336]` patches (84–168 h); see
 `../SPEC/inference.md`.
 
