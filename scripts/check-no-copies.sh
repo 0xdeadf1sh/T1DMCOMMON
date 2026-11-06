@@ -35,7 +35,7 @@ cat >"$PATDIR/cache" <<'EOF'
 It moves the warm-up, never the simulator clock
 arm 0 is bit-identical to an untouched
 What the model sees is the patient's record, not the physiology
-is never rejected, whatever it does
+the kept tails fall less than the simulator's
 geometry is in the cache, not in a constant the reader holds
 EOF
 cat >"$PATDIR/watch" <<'EOF'

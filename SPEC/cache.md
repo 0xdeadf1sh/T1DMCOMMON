@@ -104,8 +104,12 @@ the cache does not store them; anything measured against physiology reads those.
 
 ## 5. Rejection
 
-Rail rejection and hypoglycaemia oversampling read the **context** alone. A tail
-is never rejected, whatever it does.
+Rail rejection and hypoglycaemia oversampling read the **context** alone.
+
+A row is also re-drawn when `bg_observed` in any of its four tails dips below
+`--tail-reject-below`: 10 mg/dL by default, 0 to disable. The cut keeps tails off
+the 1 mg/dL clamp at the price of a dose-conditioned target: for a given bolus,
+the kept tails fall less than the simulator's.
 
 ## 6. On disk
 
@@ -137,6 +141,7 @@ apart on disk, and a name is never shared between the two ranks.
 | `tail_steps` | `24` |
 | `tail_arms` | `["none", "bolus", "carbs", "bolus_carbs"]` |
 | `tail_channels` | the channel names behind the `tail_` arrays |
+| `tail_reject_below` | the §5 tail floor in mg/dL, `0` if off |
 
 A consumer gates on these keys rather than on a simulated-hours scalar: the
 geometry is in the cache, not in a constant the reader holds.

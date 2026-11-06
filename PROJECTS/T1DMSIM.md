@@ -60,6 +60,11 @@ the glucose-effectiveness pull at `GE_RATE` 0.015 does not stop it; one fell
 105 → 1.5 mg/dL inside 2 h. No test pins the undosed tail's floor or the hypo
 rescue refractories.
 
+A boundary bolus does it far more often: about 8% of bolus-arm tails reach the
+1 mg/dL clamp, and over half of those dosed 5–20 U fall below 54 mg/dL. The cache
+re-draws any row whose tail dips below `--tail-reject-below` (`../SPEC/cache.md`
+§5), so at the default no stored tail touches the clamp.
+
 ## The exported record is the patient's log
 
 What leaves the simulator is what the patient believes: `total_carb` and the
