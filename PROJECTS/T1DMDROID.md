@@ -5,7 +5,7 @@ data, pushes to paired BLE peripherals over the watch link, and can mirror a
 subset outward — see *Outbound destinations*.
 
 Kotlin + Compose, multi-module Gradle, with a Rust core (`crates/t1dm-core`) over
-JNI. MIT. Sideload-only, never a store listing. Android 12+ on arm64-v8a and
+JNI. GPL-3.0-or-later. Sideload-only, never a store listing. Android 12+ on arm64-v8a and
 x86_64; tested on one phone.
 
 > Some of this project's knowledge is **deliberately not here**: device protocol
